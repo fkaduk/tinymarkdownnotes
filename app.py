@@ -30,7 +30,6 @@ def load_note(slug):
     note_path = get_note_path(slug)
     if not note_path.exists():
         return None
-
     with open(note_path, "r") as f:
         return json.load(f)
 
