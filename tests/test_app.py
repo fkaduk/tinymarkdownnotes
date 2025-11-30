@@ -44,10 +44,8 @@ class TestNoteViewing:
         """Viewing an existing note works."""
         from datetime import datetime, timezone
 
-        import app as app_module
-
         # Create note manually
-        note_path = app_module.NOTES_DIR / "mytest.json"
+        note_path = app.config["NOTES_DIR"] / "mytest.json"
         note_data = {
             "markdown": "# mytest\n\n- [ ] First item\n",
             "version": 1,
@@ -66,10 +64,8 @@ class TestNoteViewing:
         """Note page includes share link."""
         from datetime import datetime, timezone
 
-        import app as app_module
-
         # Create note manually
-        note_path = app_module.NOTES_DIR / "share-test.json"
+        note_path = app.config["NOTES_DIR"] / "share-test.json"
         note_data = {
             "markdown": "# share-test\n\n- [ ] First item\n",
             "version": 1,
@@ -87,10 +83,8 @@ class TestNoteViewing:
         """Note page has Preview and Edit tabs."""
         from datetime import datetime, timezone
 
-        import app as app_module
-
         # Create note manually
-        note_path = app_module.NOTES_DIR / "ui-test.json"
+        note_path = app.config["NOTES_DIR"] / "ui-test.json"
         note_data = {
             "markdown": "# ui-test\n\n- [ ] First item\n",
             "version": 1,
@@ -113,10 +107,8 @@ class TestNoteEditing:
         """Editing note with correct version succeeds."""
         from datetime import datetime, timezone
 
-        import app as app_module
-
         # Create note manually
-        note_path = app_module.NOTES_DIR / "edit-test.json"
+        note_path = app.config["NOTES_DIR"] / "edit-test.json"
         note_data = {
             "markdown": "# edit-test\n\n- [ ] First item\n",
             "version": 1,
@@ -144,10 +136,8 @@ class TestNoteEditing:
         """Editing note with wrong version returns conflict."""
         from datetime import datetime, timezone
 
-        import app as app_module
-
         # Create note manually
-        note_path = app_module.NOTES_DIR / "conflict-test.json"
+        note_path = app.config["NOTES_DIR"] / "conflict-test.json"
         note_data = {
             "markdown": "# conflict-test\n\n- [ ] First item\n",
             "version": 1,
@@ -168,10 +158,8 @@ class TestNoteEditing:
         """Editing note increments version number."""
         from datetime import datetime, timezone
 
-        import app as app_module
-
         # Create note manually
-        note_path = app_module.NOTES_DIR / "version-test.json"
+        note_path = app.config["NOTES_DIR"] / "version-test.json"
         note_data = {
             "markdown": "# version-test\n\n- [ ] First item\n",
             "version": 1,
@@ -186,7 +174,7 @@ class TestNoteEditing:
         )
 
         # Check version in file
-        note_path = app_module.NOTES_DIR / "version-test.json"
+        note_path = app.config["NOTES_DIR"] / "version-test.json"
         with open(note_path) as f:
             data = json.load(f)
             assert data["version"] == 2
@@ -202,10 +190,8 @@ class TestNoteEditing:
         """Editing note with content too large returns 413."""
         from datetime import datetime, timezone
 
-        import app as app_module
-
         # Create note manually
-        note_path = app_module.NOTES_DIR / "large-test.json"
+        note_path = app.config["NOTES_DIR"] / "large-test.json"
         note_data = {
             "markdown": "# large-test\n\n- [ ] First item\n",
             "version": 1,
@@ -269,10 +255,8 @@ class TestMarkdownRendering:
         """Note page includes markdown-it scripts."""
         from datetime import datetime, timezone
 
-        import app as app_module
-
         # Create note manually
-        note_path = app_module.NOTES_DIR / "render-test.json"
+        note_path = app.config["NOTES_DIR"] / "render-test.json"
         note_data = {
             "markdown": "# render-test\n\n- [ ] First item\n",
             "version": 1,
@@ -291,10 +275,8 @@ class TestMarkdownRendering:
         """Note data is embedded in page for JS."""
         from datetime import datetime, timezone
 
-        import app as app_module
-
         # Create note manually
-        note_path = app_module.NOTES_DIR / "json-test.json"
+        note_path = app.config["NOTES_DIR"] / "json-test.json"
         note_data = {
             "markdown": "# json-test\n\n- [ ] First item\n",
             "version": 1,

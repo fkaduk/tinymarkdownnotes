@@ -1,4 +1,3 @@
-import os
 import shutil
 import sys
 import tempfile
@@ -14,11 +13,19 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 def app():
     """Create test app with isolated temp directory."""
     test_notes_dir = tempfile.mkdtemp()
-    os.environ["NOTES_ADMIN_KEY"] = "test-admin-key"
-    import app as app_module
 
-    app_module.NOTES_DIR = Path(test_notes_dir)
-    app_module.ADMIN_KEY = "test-admin-key"
-    app_module.app.config["TESTING"] = True
-    yield app_module.app
+    from app import create_app
+
+    # Create app with test configuration
+    test_app = create_app(
+        test_config={
+            "TESTING": True,
+            "NOTES_DIR": Path(test_notes_dir),
+            "ADMIN_KEY": "test-admin-key",
+        }
+    )
+
+    yield test_app
+
+    # Cleanup
     shutil.rmtree(test_notes_dir, ignore_errors=True)
