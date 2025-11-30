@@ -7,41 +7,31 @@ class TestNoteCreation:
     """Test note creation functionality."""
 
     def test_create_note_without_key_returns_404(self, app):
-        """Accessing non-existent note without key returns 404."""
+        """Accessing non-existent note without key returns 404"""
         response = app.test_client().get("/notes/test")
         assert response.status_code == 404
         assert b"Note not found" in response.data
 
     def test_create_note_with_wrong_key_returns_404(self, app):
-        """Creating note with wrong admin key returns 404."""
+        """Creating note with wrong admin key returns 404"""
         response = app.test_client().get("/notes/test?key=wrong-key")
         assert response.status_code == 404
 
     def test_create_note_with_correct_key_succeeds(self, app):
-        """Creating note with correct admin key succeeds."""
+        """Creating note with correct admin key succeeds"""
         response = app.test_client().get("/notes/test?key=test-admin-key")
         assert response.status_code == 200
         assert b"Note: test" in response.data
         assert b"First item" in response.data
 
     def test_invalid_slug_blocked(self, app):
-        """Invalid slug characters are blocked by Flask routing or validation.
-
-        Path traversal attempts like '../etc/passwd' return 404 because Flask's
-        routing doesn't match them to our /notes/<slug> pattern. This is fine
-        from a security perspective - the malicious request is blocked before
-        reaching our handler.
-
-        Other invalid characters that do reach our handler (like 'test@note')
-        would return 400 from our slug validation, but Flask's routing provides
-        the first line of defense.
-        """
+        """Invalid slug characters are blocked"""
         response = app.test_client().get("/notes/../etc/passwd?key=test-admin-key")
         # Either 400 (our validation) or 404 (Flask routing) is acceptable
         assert response.status_code in [400, 404]
 
-    def test_slug_too_long_returns_400(self, app):
-        """Slug longer than 64 chars returns 400."""
+    def test_long_slug_blocked(self, app):
+        """Overly long slug is blocked"""
         long_slug = "a" * 65
         response = app.test_client().get(f"/notes/{long_slug}?key=test-admin-key")
         assert response.status_code == 400
@@ -52,8 +42,19 @@ class TestNoteViewing:
 
     def test_view_existing_note(self, app):
         """Viewing an existing note works."""
-        # Create note
-        app.test_client().get("/notes/mytest?key=test-admin-key")
+        from datetime import datetime, timezone
+
+        import app as app_module
+
+        # Create note manually
+        note_path = app_module.NOTES_DIR / "mytest.json"
+        note_data = {
+            "markdown": "# mytest\n\n- [ ] First item\n",
+            "version": 1,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(note_path, "w") as f:
+            json.dump(note_data, f, indent=2)
 
         # View note
         response = app.test_client().get("/notes/mytest")
@@ -63,7 +64,20 @@ class TestNoteViewing:
 
     def test_view_note_includes_share_link(self, app):
         """Note page includes share link."""
-        app.test_client().get("/notes/share-test?key=test-admin-key")
+        from datetime import datetime, timezone
+
+        import app as app_module
+
+        # Create note manually
+        note_path = app_module.NOTES_DIR / "share-test.json"
+        note_data = {
+            "markdown": "# share-test\n\n- [ ] First item\n",
+            "version": 1,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(note_path, "w") as f:
+            json.dump(note_data, f, indent=2)
+
         response = app.test_client().get("/notes/share-test")
 
         assert response.status_code == 200
@@ -71,7 +85,20 @@ class TestNoteViewing:
 
     def test_note_has_preview_and_edit_tabs(self, app):
         """Note page has Preview and Edit tabs."""
-        app.test_client().get("/notes/ui-test?key=test-admin-key")
+        from datetime import datetime, timezone
+
+        import app as app_module
+
+        # Create note manually
+        note_path = app_module.NOTES_DIR / "ui-test.json"
+        note_data = {
+            "markdown": "# ui-test\n\n- [ ] First item\n",
+            "version": 1,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(note_path, "w") as f:
+            json.dump(note_data, f, indent=2)
+
         response = app.test_client().get("/notes/ui-test")
 
         assert response.status_code == 200
@@ -84,11 +111,22 @@ class TestNoteEditing:
 
     def test_edit_note_with_correct_version(self, app):
         """Editing note with correct version succeeds."""
-        # Create note
-        app.test_client().get("/notes/edit-test?key=test-admin-key")
+        from datetime import datetime, timezone
+
+        import app as app_module
+
+        # Create note manually
+        note_path = app_module.NOTES_DIR / "edit-test.json"
+        note_data = {
+            "markdown": "# edit-test\n\n- [ ] First item\n",
+            "version": 1,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(note_path, "w") as f:
+            json.dump(note_data, f, indent=2)
 
         # Edit note
-        response = app.post(
+        response = app.test_client().post(
             "/notes/edit-test",
             data={"markdown": "# Updated\n\n- [x] Done", "version": "1"},
             follow_redirects=False,
@@ -104,11 +142,22 @@ class TestNoteEditing:
 
     def test_edit_note_with_wrong_version_returns_409(self, app):
         """Editing note with wrong version returns conflict."""
-        # Create note
-        app.test_client().get("/notes/conflict-test?key=test-admin-key")
+        from datetime import datetime, timezone
+
+        import app as app_module
+
+        # Create note manually
+        note_path = app_module.NOTES_DIR / "conflict-test.json"
+        note_data = {
+            "markdown": "# conflict-test\n\n- [ ] First item\n",
+            "version": 1,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(note_path, "w") as f:
+            json.dump(note_data, f, indent=2)
 
         # Try to edit with wrong version
-        response = app.post(
+        response = app.test_client().post(
             "/notes/conflict-test", data={"markdown": "# Should fail", "version": "999"}
         )
 
@@ -117,15 +166,22 @@ class TestNoteEditing:
 
     def test_edit_note_increments_version(self, app):
         """Editing note increments version number."""
-        from pathlib import Path
+        from datetime import datetime, timezone
 
         import app as app_module
 
-        # Create note
-        app.test_client().get("/notes/version-test?key=test-admin-key")
+        # Create note manually
+        note_path = app_module.NOTES_DIR / "version-test.json"
+        note_data = {
+            "markdown": "# version-test\n\n- [ ] First item\n",
+            "version": 1,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(note_path, "w") as f:
+            json.dump(note_data, f, indent=2)
 
         # Edit note
-        app.post(
+        app.test_client().post(
             "/notes/version-test", data={"markdown": "# Version 2", "version": "1"}
         )
 
@@ -137,19 +193,30 @@ class TestNoteEditing:
 
     def test_edit_nonexistent_note_returns_404(self, app):
         """Editing non-existent note returns 404."""
-        response = app.post(
+        response = app.test_client().post(
             "/notes/doesnotexist", data={"markdown": "# Test", "version": "1"}
         )
         assert response.status_code == 404
 
     def test_edit_note_too_large_returns_413(self, app):
         """Editing note with content too large returns 413."""
-        # Create note
-        app.test_client().get("/notes/large-test?key=test-admin-key")
+        from datetime import datetime, timezone
+
+        import app as app_module
+
+        # Create note manually
+        note_path = app_module.NOTES_DIR / "large-test.json"
+        note_data = {
+            "markdown": "# large-test\n\n- [ ] First item\n",
+            "version": 1,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(note_path, "w") as f:
+            json.dump(note_data, f, indent=2)
 
         # Try to save huge content
         large_content = "x" * 200_000
-        response = app.post(
+        response = app.test_client().post(
             "/notes/large-test", data={"markdown": large_content, "version": "1"}
         )
 
@@ -200,7 +267,20 @@ class TestMarkdownRendering:
 
     def test_note_contains_markdown_scripts(self, app):
         """Note page includes markdown-it scripts."""
-        app.test_client().get("/notes/render-test?key=test-admin-key")
+        from datetime import datetime, timezone
+
+        import app as app_module
+
+        # Create note manually
+        note_path = app_module.NOTES_DIR / "render-test.json"
+        note_data = {
+            "markdown": "# render-test\n\n- [ ] First item\n",
+            "version": 1,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(note_path, "w") as f:
+            json.dump(note_data, f, indent=2)
+
         response = app.test_client().get("/notes/render-test")
 
         assert b"markdown-it" in response.data
@@ -209,7 +289,20 @@ class TestMarkdownRendering:
 
     def test_note_json_data_embedded(self, app):
         """Note data is embedded in page for JS."""
-        app.test_client().get("/notes/json-test?key=test-admin-key")
+        from datetime import datetime, timezone
+
+        import app as app_module
+
+        # Create note manually
+        note_path = app_module.NOTES_DIR / "json-test.json"
+        note_data = {
+            "markdown": "# json-test\n\n- [ ] First item\n",
+            "version": 1,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with open(note_path, "w") as f:
+            json.dump(note_data, f, indent=2)
+
         response = app.test_client().get("/notes/json-test")
 
         # Check that markdown content is in the page
