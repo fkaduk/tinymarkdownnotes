@@ -5,12 +5,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import Flask, jsonify, redirect, render_template, request, url_for
+from flask_httpauth import HTTPBasicAuth
 
 SLUG_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 MAX_MARKDOWN_SIZE = 100_000
 
 
-def create_app(test_config=None):
+def create_app(config=None):
     """Application factory for Flask app."""
     app = Flask(__name__)
 
@@ -18,11 +19,20 @@ def create_app(test_config=None):
         NOTES_DIR=Path("notes"),
         ADMIN_KEY=os.environ.get("NOTES_ADMIN_KEY", "change-me-in-production"),
     )
-    if test_config is not None:
-        app.config.from_mapping(test_config)
+    if config is not None:
+        app.config.from_mapping(config)
 
     notes_dir = app.config["NOTES_DIR"]
     notes_dir.mkdir(exist_ok=True)
+
+    auth = HTTPBasicAuth()
+
+    @auth.verify_password
+    def verify_password(username, password):
+        """Verify password for HTTP Basic Auth. Username is ignored."""
+        if password == app.config["ADMIN_KEY"]:
+            return "admin"
+        return None
 
     def validate_slug(slug):
         """Validate slug against allowed pattern."""
@@ -64,15 +74,14 @@ def create_app(test_config=None):
         print(f"[CHANGE] Note '{slug}' updated from {ip} | {user_agent} | {url}")
 
     @app.route("/notes/<slug>", methods=["GET"])
+    @auth.login_required(optional=True)
     def view_note(slug):
         """View or create a note."""
         if not validate_slug(slug):
             return "Invalid note slug", 400
         note = load_note(slug)
         if note is None:
-            admin_key = request.args.get("key")
-            if admin_key == app.config["ADMIN_KEY"]:
-                # Create new note
+            if auth.current_user():
                 default_markdown = f"# {slug}\n\n- [ ] First item\n"
                 save_note(slug, default_markdown, 1)
                 note = load_note(slug)
@@ -81,6 +90,7 @@ def create_app(test_config=None):
         return render_template("note.html", slug=slug, note=note)
 
     @app.route("/notes/<slug>", methods=["POST"])
+    @auth.login_required
     def update_note(slug):
         """Update an existing note."""
         if not validate_slug(slug):
