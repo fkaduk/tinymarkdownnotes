@@ -14,21 +14,16 @@ def create_app(test_config=None):
     """Application factory for Flask app."""
     app = Flask(__name__)
 
-    # Default configuration
     app.config.from_mapping(
         NOTES_DIR=Path("notes"),
         ADMIN_KEY=os.environ.get("NOTES_ADMIN_KEY", "change-me-in-production"),
     )
-
-    # Override with test config if provided
     if test_config is not None:
         app.config.from_mapping(test_config)
 
-    # Ensure notes directory exists
     notes_dir = app.config["NOTES_DIR"]
     notes_dir.mkdir(exist_ok=True)
 
-    # Helper functions that use app config
     def validate_slug(slug):
         """Validate slug against allowed pattern."""
         return SLUG_PATTERN.match(slug) is not None
@@ -55,11 +50,9 @@ def create_app(test_config=None):
             if not note_path.exists()
             else None,
         }
-
         if note_path.exists():
             existing = load_note(slug)
             note_data["created_at"] = existing.get("created_at")
-
         with open(note_path, "w") as f:
             json.dump(note_data, f, indent=2)
 
@@ -68,19 +61,14 @@ def create_app(test_config=None):
         ip = request_info.get("ip", "unknown")
         user_agent = request_info.get("user_agent", "unknown")
         url = request_info.get("url", "unknown")
-
         print(f"[CHANGE] Note '{slug}' updated from {ip} | {user_agent} | {url}")
 
     @app.route("/notes/<slug>", methods=["GET"])
     def view_note(slug):
         """View or create a note."""
-        # Validate slug
         if not validate_slug(slug):
             return "Invalid note slug", 400
-
         note = load_note(slug)
-
-        # If note doesn't exist
         if note is None:
             admin_key = request.args.get("key")
             if admin_key == app.config["ADMIN_KEY"]:
@@ -90,39 +78,25 @@ def create_app(test_config=None):
                 note = load_note(slug)
             else:
                 return "Note not found", 404
-
-        # Render the note page
         return render_template("note.html", slug=slug, note=note)
 
     @app.route("/notes/<slug>", methods=["POST"])
     def update_note(slug):
         """Update an existing note."""
-        # Validate slug
         if not validate_slug(slug):
             return "Invalid note slug", 400
-
         note = load_note(slug)
         if note is None:
             return "Note not found", 404
-
-        # Get form data
         new_markdown = request.form.get("markdown", "")
         client_version = int(request.form.get("version", 0))
-
-        # Check size limit
         if len(new_markdown) > MAX_MARKDOWN_SIZE:
             return "Note content too large", 413
-
-        # Version check (optimistic locking)
         current_version = note["version"]
         if client_version != current_version:
             return render_template("conflict.html", slug=slug), 409
-
-        # Save updated note
         new_version = current_version + 1
         save_note(slug, new_markdown, new_version)
-
-        # Notify about the change
         notify_change(
             slug,
             {
@@ -131,8 +105,6 @@ def create_app(test_config=None):
                 "url": request.url,
             },
         )
-
-        # Redirect to avoid resubmission
         return redirect(url_for("view_note", slug=slug))
 
     @app.route("/")
