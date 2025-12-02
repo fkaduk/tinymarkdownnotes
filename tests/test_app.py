@@ -117,7 +117,7 @@ class TestNoteEditing:
         )
 
         assert response.status_code == 409
-        assert b"Cannot save" in response.data
+        assert b"Conflict" in response.data
 
     def test_edit_note_increments_version(self, app, create_note):
         """Editing note increments version number"""

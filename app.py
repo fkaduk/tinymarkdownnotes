@@ -1,10 +1,9 @@
 import json
 import os
 import re
-from datetime import datetime, timezone
 from pathlib import Path
 
-from flask import Flask, jsonify, redirect, render_template, request, url_for
+from flask import Flask, redirect, render_template, request, url_for
 from flask_httpauth import HTTPBasicAuth
 
 SLUG_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
@@ -56,41 +55,51 @@ def create_app(config=None):
         note_data = {
             "markdown": markdown,
             "version": version,
-            "created_at": datetime.now(timezone.utc).isoformat()
-            if not note_path.exists()
-            else None,
         }
-        if note_path.exists():
-            existing = load_note(slug)
-            note_data["created_at"] = existing.get("created_at")
         with open(note_path, "w") as f:
             json.dump(note_data, f, indent=2)
 
-    def notify_change(slug, request_info):
-        """Log note changes. Extend this for email/webhook notifications."""
-        ip = request_info.get("ip", "unknown")
-        user_agent = request_info.get("user_agent", "unknown")
-        url = request_info.get("url", "unknown")
-        print(f"[CHANGE] Note '{slug}' updated from {ip} | {user_agent} | {url}")
+    @app.route("/notes", methods=["POST"])
+    @auth.login_required
+    def create_note():
+        """Create a new note."""
+        slug = request.form.get("slug", "").strip()
+
+        if not validate_slug(slug):
+            return """
+            <script>
+                alert('Invalid note name');
+                window.history.back();
+            </script>
+            """, 400
+
+        if load_note(slug):
+            return """
+            <script>
+                alert('Note already exists');
+                window.history.back();
+            </script>
+            """, 409
+
+        init_template_path = Path(__file__).parent / "templates" / "init_note.md"
+        with open(init_template_path, "r") as f:
+            template_content = f.read()
+        default_markdown = f"# {slug}\n{template_content}"
+        save_note(slug, default_markdown, 1)
+
+        return redirect(url_for("view_note", slug=slug), code=303)
 
     @app.route("/notes/<slug>", methods=["GET"])
-    @auth.login_required(optional=True)
     def view_note(slug):
-        """View or create a note."""
+        """View a note."""
         if not validate_slug(slug):
             return "Invalid note slug", 400
         note = load_note(slug)
         if note is None:
-            if auth.current_user():
-                default_markdown = f"# {slug}\n\n- [ ] First item\n"
-                save_note(slug, default_markdown, 1)
-                note = load_note(slug)
-            else:
-                return "Note not found", 404
+            return "Note not found", 404
         return render_template("note.html", slug=slug, note=note)
 
     @app.route("/notes/<slug>", methods=["POST"])
-    @auth.login_required
     def update_note(slug):
         """Update an existing note."""
         if not validate_slug(slug):
@@ -104,36 +113,24 @@ def create_app(config=None):
             return "Note content too large", 413
         current_version = note["version"]
         if client_version != current_version:
-            return render_template("conflict.html", slug=slug), 409
+            return """
+            <script>
+                alert('Conflict: note has been updated by someone else. Please reload the page to see the latest version.');
+            </script>
+            """, 409
         new_version = current_version + 1
         save_note(slug, new_markdown, new_version)
-        notify_change(
-            slug,
-            {
-                "ip": request.remote_addr,
-                "user_agent": request.headers.get("User-Agent"),
-                "url": request.url,
-            },
-        )
-        return redirect(url_for("view_note", slug=slug))
+        return redirect(url_for("view_note", slug=slug), code=303)
 
     @app.route("/")
     def index():
-        """Simple landing page."""
-        return """
-        <html>
-        <head><title>Tiny Markdown Notes</title></head>
-        <body>
-            <h1>Tiny Markdown Notes</h1>
-            <p>Go to <code>/notes/&lt;slug&gt;?key=ADMIN_KEY</code> to create a new note.</p>
-            <p>Example: <a href="/notes/test?key=change-me-in-production">/notes/test?key=change-me-in-production</a></p>
-        </body>
-        </html>
-        """
+        """Landing page with create form."""
+        return render_template("index.html")
 
     return app
 
 
+app = create_app()
+
 if __name__ == "__main__":
-    app = create_app()
     app.run(host="0.0.0.0", port=5000, debug=True)
