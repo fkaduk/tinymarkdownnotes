@@ -1,0 +1,19 @@
+{$DOMAIN:localhost} {
+    rate_limit {
+        zone general {
+            key {remote_host}
+            events 6
+            window 1m
+        }
+        zone create_notes {
+            key {remote_host}
+            match {
+                method POST
+                path /notes
+            }
+            events 2
+            window 1m
+        }
+    }
+    reverse_proxy notes:5000
+}
