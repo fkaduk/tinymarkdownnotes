@@ -6,7 +6,7 @@ services:
     ports:
       - "5000:5000"
     environment:
-      - NOTES_ADMIN_KEY=change-me-in-production
+      - NOTES_ADMIN_KEY=${NOTES_ADMIN_KEY:-change-me-in-production}
     volumes:
       - ./notes:/app/notes
     restart: unless-stopped

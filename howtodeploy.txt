@@ -1,0 +1,159 @@
+# Production Deployment Guide for Hetzner VPS
+
+## 1. Create Hetzner VPS
+
+Via Hetzner Cloud Console:
+- Go to https://console.hetzner.cloud
+- Create new project (or use existing)
+- Click "Add Server"
+- Location: Choose closest to you (Falkenstein, Helsinki, etc.)
+- Image: Ubuntu 24.04
+- Type: CPX11 (2 vCPU, 2GB RAM, €4.51/mo)
+- SSH Key: Add your public SSH key (from ~/.ssh/id_rsa.pub)
+- Firewall: Create firewall allowing ports 22 (SSH), 80 (HTTP), 443 (HTTPS)
+- Click "Create & Buy"
+- Note the IP address shown
+
+## 2. Configure DNS
+
+Point your domain to the VPS:
+- Go to your DNS provider (wherever you manage hesawthecat.com)
+- Add an A record:
+  Type: A
+  Name: notes
+  Value: [your-vps-ip]
+  TTL: 300
+- Wait 5-10 minutes for DNS propagation
+- Verify: dig notes.hesawthecat.com should show your VPS IP
+
+## 3. Initial VPS Setup
+
+SSH into your VPS:
+```
+ssh root@[your-vps-ip]
+```
+
+Update system and install dependencies:
+```
+apt update && apt upgrade -y
+apt install -y docker.io docker-compose git
+systemctl enable docker
+systemctl start docker
+docker --version
+docker-compose --version
+```
+
+## 4. Deploy the App
+
+Clone your repo:
+```
+git clone https://github.com/yourusername/tinymarkdownnotes.git
+cd tinymarkdownnotes
+```
+
+Set up environment:
+```
+cp .env.example .env
+nano .env
+```
+
+Set these values in .env:
+```
+NOTES_ADMIN_KEY=your-very-strong-password-here
+DOMAIN=notes.hesawthecat.com
+```
+
+Save and exit (Ctrl+O, Enter, Ctrl+X)
+
+Set up permissions and start:
+```
+make init
+make up
+```
+
+This will:
+- Build the Flask app (base deployment)
+- Build Caddy with rate-limit module (takes ~1 minute, production deployment)
+- Start both containers
+- Caddy will automatically get SSL certificate from Let's Encrypt
+
+## 5. Verify It Works
+
+Check container status:
+```
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml ps
+```
+
+Should show both notes and caddy as "Up"
+
+Check logs:
+```
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs caddy
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs notes
+```
+
+Test the site:
+- Visit https://notes.hesawthecat.com in your browser
+- Should see the home page with create form
+- SSL should work (green padlock in browser)
+
+## 6. Create Your First Note
+
+- Enter a note name (e.g., "test")
+- Browser will prompt for username/password
+- Username: anything (ignored)
+- Password: [your NOTES_ADMIN_KEY from .env]
+- Should create and redirect to the note
+
+## 7. Optional: Set Up Backups
+
+Create a backup script:
+```
+nano /root/backup-notes.sh
+```
+
+Add:
+```
+#!/bin/bash
+cd /root/tinymarkdownnotes
+tar -czf /root/backups/notes-$(date +%Y%m%d-%H%M%S).tar.gz notes/
+find /root/backups -name "notes-*.tar.gz" -mtime +7 -delete
+```
+
+Save, then:
+```
+chmod +x /root/backup-notes.sh
+mkdir -p /root/backups
+./backup-notes.sh
+```
+
+Set up daily backup (optional):
+```
+crontab -e
+```
+Add: 0 2 * * * /root/backup-notes.sh
+
+## 8. Future Updates
+
+When you want to deploy changes:
+```
+ssh root@[your-vps-ip]
+cd tinymarkdownnotes
+git pull
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+## Troubleshooting
+
+If SSL doesn't work:
+- Wait a few minutes for Let's Encrypt
+- Check logs: docker-compose logs caddy
+- Verify DNS: dig notes.hesawthecat.com
+
+If can't connect:
+- Check firewall allows ports 80, 443
+- Check containers: docker ps
+
+If rate limited:
+- Wait 1 minute
+- Or adjust limits in Caddyfile and rebuild
