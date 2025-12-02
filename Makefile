@@ -1,4 +1,9 @@
-.PHONY: up down restart logs
+.PHONY: up down restart logs init
+
+init:
+	#fix this hack
+	mkdir -p notes
+	sudo chown -R 1000:1000 notes/
 
 up:
 	docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
