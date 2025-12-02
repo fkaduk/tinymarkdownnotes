@@ -4,164 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Note: {{ slug }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.0.0/dist/markdown-it.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/markdown-it-task-lists@2.1.1/dist/markdown-it-task-lists.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
-            line-height: 1.6;
-            background: #1a1a1a;
-            color: #e0e0e0;
-        }
-        .container {
-            background: #2b2b2b;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-        }
-        h1 {
-            margin-top: 0;
-            color: #f0f0f0;
-        }
-        .share-link {
-            background: #1e3a4a;
-            padding: 10px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            color: #a0d0e0;
-        }
-        .share-link code {
-            background: #1a1a1a;
-            padding: 4px 8px;
-            border-radius: 3px;
-            font-family: monospace;
-            color: #5eb3d6;
-        }
-        .tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #404040;
-        }
-        .tab-button {
-            padding: 10px 20px;
-            border: none;
-            background: none;
-            cursor: pointer;
-            font-size: 16px;
-            color: #a0a0a0;
-            border-bottom: 3px solid transparent;
-            transition: all 0.2s;
-        }
-        .tab-button:hover {
-            color: #e0e0e0;
-            background: #333;
-        }
-        .tab-button.active {
-            color: #5eb3d6;
-            border-bottom-color: #5eb3d6;
-        }
-        #preview {
-            min-height: 200px;
-            padding: 20px;
-            border: 1px solid #404040;
-            border-radius: 4px;
-            background: #1f1f1f;
-            color: #e0e0e0;
-        }
-        #preview h1, #preview h2, #preview h3 {
-            margin-top: 24px;
-            margin-bottom: 12px;
-            color: #f0f0f0;
-        }
-        #preview h1:first-child,
-        #preview h2:first-child,
-        #preview h3:first-child {
-            margin-top: 0;
-        }
-        #preview ul, #preview ol {
-            padding-left: 24px;
-        }
-        #preview input[type="checkbox"] {
-            margin-right: 8px;
-            cursor: pointer;
-        }
-        #preview a {
-            color: #5eb3d6;
-        }
-        #preview a:hover {
-            color: #7ec9e6;
-        }
-        #preview code {
-            background: #333;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-family: monospace;
-            font-size: 0.9em;
-            color: #e0e0e0;
-        }
-        #preview pre {
-            background: #1a1a1a;
-            padding: 12px;
-            border-radius: 4px;
-            overflow-x: auto;
-            border: 1px solid #404040;
-        }
-        #preview pre code {
-            background: none;
-            padding: 0;
-        }
-        #editor-wrap {
-            display: none;
-        }
-        #editor {
-            width: 100%;
-            min-height: 400px;
-            padding: 12px;
-            font-family: monospace;
-            font-size: 14px;
-            border: 1px solid #404040;
-            border-radius: 4px;
-            resize: vertical;
-            background: #1a1a1a;
-            color: #e0e0e0;
-        }
-        .save-button {
-            margin-top: 10px;
-            padding: 10px 24px;
-            background: #5eb3d6;
-            color: #1a1a1a;
-            border: none;
-            border-radius: 4px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: background 0.2s;
-            font-weight: 500;
-        }
-        .save-button:hover {
-            background: #7ec9e6;
-        }
-    </style>
 </head>
 <body>
     <div class="container">
-        <h1>Note: {{ slug }}</h1>
-
-        <div class="share-link">
-            Share this link: <code id="share-url"></code>
-        </div>
-
         <div class="tabs">
-            <button class="tab-button active" id="preview-tab">Preview</button>
+            <button class="tab-button active" id="preview-tab">View</button>
             <button class="tab-button" id="edit-tab">Edit</button>
+            <div class="spacer"></div>
+            <button class="tab-button" id="copy-link-tab">📋 Copy link</button>
         </div>
 
         <div id="preview"></div>
@@ -182,7 +36,6 @@
 
         // Set share URL (without query params)
         const cleanUrl = window.location.origin + window.location.pathname;
-        document.getElementById('share-url').textContent = cleanUrl;
 
         // Get DOM elements
         const previewDiv = document.getElementById('preview');
@@ -191,6 +44,7 @@
         const versionField = document.getElementById('version-field');
         const previewTab = document.getElementById('preview-tab');
         const editTab = document.getElementById('edit-tab');
+        const copyLinkTab = document.getElementById('copy-link-tab');
 
         // Configure markdown-it
         const md = window.markdownit({
@@ -249,17 +103,9 @@
 
                 if (response.ok) {
                     window.location.reload();
-                } else if (response.status === 409) {
-                    alert('Note was updated elsewhere. Reloading...');
-                    window.location.reload();
-                } else {
-                    alert('Save failed. Reloading...');
-                    window.location.reload();
                 }
             } catch (error) {
                 console.error('Save failed:', error);
-                alert('Save failed. Reloading...');
-                window.location.reload();
             }
         }
 
@@ -286,6 +132,18 @@
         // Tab button listeners
         previewTab.addEventListener('click', showPreview);
         editTab.addEventListener('click', showEdit);
+        copyLinkTab.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(cleanUrl);
+                const originalText = copyLinkTab.textContent;
+                copyLinkTab.textContent = '✓ Copied';
+                setTimeout(() => {
+                    copyLinkTab.textContent = originalText;
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy:', err);
+            }
+        });
 
         // Initialize in preview mode
         renderPreview();
