@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tiny Markdown Notes</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        input[type="text"] {
+            width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Tiny Markdown Notes</h1>
+        <form action="/notes" method="POST">
+            <input type="text" name="slug"
+                   placeholder="note-name"
+                   pattern="[a-zA-Z0-9_-]{1,64}"
+                   required>
+            <button type="submit">Create Note</button>
+        </form>
+    </div>
+</body>
+</html>
