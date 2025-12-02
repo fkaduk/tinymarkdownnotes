@@ -5,6 +5,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 COPY app.py .
 COPY templates/ templates/
+COPY static/ static/
 RUN mkdir -p notes
 RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
