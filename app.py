@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import tempfile
 from pathlib import Path
 
 from flask import Flask, redirect, render_template, request, url_for
@@ -56,8 +57,12 @@ def create_app(config=None):
             "markdown": markdown,
             "version": version,
         }
-        with open(note_path, "w") as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", dir=note_path.parent, delete=False, suffix=".tmp"
+        ) as f:
             json.dump(note_data, f, indent=2)
+            tmp_path = f.name
+        os.replace(tmp_path, note_path)
 
     @app.route("/notes", methods=["POST"])
     @auth.login_required
