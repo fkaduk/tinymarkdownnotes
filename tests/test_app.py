@@ -119,6 +119,35 @@ class TestNoteEditing:
         assert response.status_code == 409
         assert b"Conflict" in response.data
 
+
+class TestNoteConflict:
+    """Test conflict resolution behavior."""
+
+    def test_conflict_page_shows_both_versions(self, app, create_note):
+        """Conflict page renders both the submitted and current content"""
+        create_note("conflict-test", markdown="# Their version\n", version=2)
+        response = app.test_client().post(
+            "/notes/conflict-test",
+            data={"markdown": "# My version\n", "version": "1"},
+        )
+
+        assert response.status_code == 409
+        assert b"My version" in response.data
+        assert b"Their version" in response.data
+
+    def test_conflict_save_merged_content(self, app, create_note):
+        """Saving from conflict page with current version succeeds"""
+        create_note("conflict-test", markdown="# Their version\n", version=2)
+
+        response = app.test_client().post(
+            "/notes/conflict-test",
+            data={"markdown": "# Merged\n", "version": "2"},
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        assert b"Merged" in response.data
+
     def test_edit_note_increments_version(self, app, create_note):
         """Editing note increments version number"""
         create_note("version-test")
