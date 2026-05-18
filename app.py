@@ -118,11 +118,13 @@ def create_app(config=None):
             return "Note content too large", 413
         current_version = note["version"]
         if client_version != current_version:
-            return """
-            <script>
-                alert('Conflict: note has been updated by someone else. Please reload the page to see the latest version.');
-            </script>
-            """, 409
+            return render_template(
+                "conflict.html",
+                slug=slug,
+                my_markdown=new_markdown,
+                their_markdown=note["markdown"],
+                current_version=current_version,
+            ), 409
         new_version = current_version + 1
         save_note(slug, new_markdown, new_version)
         return redirect(url_for("view_note", slug=slug), code=303)

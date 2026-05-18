@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conflict: {{ slug }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.0.0/dist/markdown-it.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it-task-lists@2.1.1/dist/markdown-it-task-lists.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h2>Edit conflict on <em>{{ slug }}</em></h2>
+        <p>Someone else saved this note while you were editing. Review both versions, edit the merged result, then save.</p>
+
+        <div class="conflict-panels">
+            <div class="conflict-panel">
+                <h3>Your version</h3>
+                <div id="my-preview" class="preview-panel"></div>
+            </div>
+            <div class="conflict-panel">
+                <h3>Their version</h3>
+                <div id="their-preview" class="preview-panel"></div>
+            </div>
+        </div>
+
+        <h3 class="merge-label">Merged result</h3>
+        <form method="post" action="{{ url_for('update_note', slug=slug) }}">
+            <textarea name="markdown" id="merge-editor">{{ my_markdown }}</textarea>
+            <input type="hidden" name="version" value="{{ current_version }}">
+            <div class="conflict-actions">
+                <button type="submit" class="save-button">Save</button>
+                <button type="button" class="button-link" onclick="document.getElementById('merge-editor').value = myMarkdown">Pick mine</button>
+                <button type="button" class="button-link" onclick="document.getElementById('merge-editor').value = theirMarkdown">Pick theirs</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const myMarkdown = {{ my_markdown | tojson }};
+        const theirMarkdown = {{ their_markdown | tojson }};
+
+        const md = window.markdownit({ html: false, breaks: true, linkify: true })
+            .use(window.markdownitTaskLists, { enabled: false });
+
+        function render(markdown, id) {
+            document.getElementById(id).innerHTML = DOMPurify.sanitize(md.render(markdown));
+        }
+
+        render(myMarkdown, 'my-preview');
+        render(theirMarkdown, 'their-preview');
+    </script>
+</body>
+</html>

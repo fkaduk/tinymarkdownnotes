@@ -166,3 +166,77 @@ button:hover, .save-button:hover {
 .save-button {
     margin-top: 10px;
 }
+
+.conflict-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.merge-label {
+    margin: 24px 0 8px 0;
+    color: #a0a0a0;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+#merge-editor {
+    width: 100%;
+    min-height: 300px;
+    padding: 12px;
+    font-family: monospace;
+    font-size: 14px;
+    border: 1px solid #404040;
+    border-radius: 4px;
+    background: #1a1a1a;
+    color: #e0e0e0;
+    resize: vertical;
+}
+
+.button-link {
+    padding: 10px 24px;
+    background: #404040;
+    color: #e0e0e0;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.2s;
+    margin-top: 10px;
+}
+
+.button-link:hover {
+    background: #505050;
+}
+
+.conflict-panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+@media (max-width: 600px) {
+    .conflict-panels {
+        grid-template-columns: 1fr;
+    }
+}
+
+.conflict-panel h3 {
+    margin: 0 0 8px 0;
+    color: #a0a0a0;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.preview-panel {
+    min-height: 200px;
+    padding: 16px;
+    border: 1px solid #404040;
+    border-radius: 4px;
+    background: #1f1f1f;
+    color: #e0e0e0;
+    overflow-y: auto;
+}
