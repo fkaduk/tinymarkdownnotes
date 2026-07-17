@@ -348,26 +348,7 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var current Note
-	err = tx.QueryRowContext(
-		r.Context(),
-		`SELECT slug, markdown, version, created_at, updated_at FROM notes WHERE slug = ?`,
-		slug,
-	).Scan(&current.Slug, &current.Markdown, &current.Version, &current.CreatedAt, &current.UpdatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		http.Error(w, "Note not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		http.Error(w, "Load note failed", http.StatusInternalServerError)
-		return
-	}
-	a.render(w, http.StatusConflict, "conflict.html", map[string]any{
-		"Slug":           slug,
-		"MyMarkdown":     markdown,
-		"TheirMarkdown":  current.Markdown,
-		"CurrentVersion": current.Version,
-	})
+	http.Error(w, "Someone else saved this note first. Your changes were not saved.", http.StatusConflict)
 }
 
 func (a *App) getNote(ctx context.Context, slug string) (Note, bool, error) {

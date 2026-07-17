@@ -183,47 +183,8 @@ func TestEditWithWrongVersionReturnsConflict(t *testing.T) {
 	if rr.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusConflict)
 	}
-	if !strings.Contains(rr.Body.String(), "Conflict") {
-		t.Fatalf("response should render conflict page: %s", rr.Body.String())
-	}
-}
-
-func TestConflictPageShowsBothVersions(t *testing.T) {
-	app := newTestApp(t)
-	createTestNote(t, app, "conflict-test", "# Their version\n", 2)
-
-	rr := formRequest(app, http.MethodPost, "/notes/conflict-test", url.Values{
-		"markdown": {"# My version\n"},
-		"version":  {"1"},
-	}, false)
-
-	body := rr.Body.String()
-	if rr.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want %d", rr.Code, http.StatusConflict)
-	}
-	if !strings.Contains(body, "My version") || !strings.Contains(body, "Their version") {
-		t.Fatalf("response missing conflict content: %s", body)
-	}
-}
-
-func TestConflictSaveMergedContent(t *testing.T) {
-	app := newTestApp(t)
-	createTestNote(t, app, "conflict-test", "# Their version\n", 2)
-
-	rr := formRequest(app, http.MethodPost, "/notes/conflict-test", url.Values{
-		"markdown": {"# Merged\n"},
-		"version":  {"2"},
-	}, false)
-
-	if rr.Code != http.StatusSeeOther {
-		t.Fatalf("status = %d, want %d", rr.Code, http.StatusSeeOther)
-	}
-	note, ok, err := app.getNote(context.Background(), "conflict-test")
-	if err != nil || !ok {
-		t.Fatalf("get note ok=%v err=%v", ok, err)
-	}
-	if note.Markdown != "# Merged\n" || note.Version != 3 {
-		t.Fatalf("note = %#v", note)
+	if !strings.Contains(rr.Body.String(), "Someone else saved this note first") {
+		t.Fatalf("response should explain that the save was rejected: %s", rr.Body.String())
 	}
 }
 

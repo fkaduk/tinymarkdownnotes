@@ -23,13 +23,12 @@
         <div id="editor-wrap">
             <form method="post">
                 <div id="stale-warning" class="stale-warning" hidden>
-                    This note has changed since you opened it. Review the conflict before saving your draft.
+                    Someone else saved this note. Your changes cannot be saved from this tab.
                 </div>
                 <textarea name="markdown" id="editor"></textarea>
                 <input type="hidden" name="version" id="version-field" value="{{ .Note.Version }}">
                 <div class="editor-actions">
                     <button type="submit" class="save-button" id="save-button">Save</button>
-                    <button type="button" class="button-link" id="review-conflict-button" hidden>Review conflict</button>
                 </div>
             </form>
         </div>
@@ -40,8 +39,8 @@
         let currentMarkdown = {{ toJSON .Note.Markdown }};
         const loadedVersion = {{ .Note.Version }};
         let latestVersion = loadedVersion;
-        let hasLocalEdits = false;
         let isStale = false;
+        let versionCheckInFlight = false;
 
         // Set share URL (without query params)
         const cleanUrl = window.location.origin + window.location.pathname;
@@ -54,7 +53,6 @@
         const form = editor.closest('form');
         const saveButton = document.getElementById('save-button');
         const staleWarning = document.getElementById('stale-warning');
-        const reviewConflictButton = document.getElementById('review-conflict-button');
         const previewTab = document.getElementById('preview-tab');
         const editTab = document.getElementById('edit-tab');
         const copyLinkTab = document.getElementById('copy-link-tab');
@@ -103,18 +101,12 @@
             }
 
             currentMarkdown = lines.join('\n');
-            hasLocalEdits = true;
             autoSave();
         }
 
-        // Auto-save the note
-        async function autoSave() {
-            if (isStale) {
-                updateStaleState(true);
-                return;
-            }
+        async function saveMarkdown(markdown) {
             const formData = new FormData();
-            formData.append('markdown', currentMarkdown);
+            formData.append('markdown', markdown);
             formData.append('version', loadedVersion);
 
             try {
@@ -123,16 +115,29 @@
                     body: formData
                 });
 
-                if (response.ok) {
-                    window.location.reload();
-                } else if (response.status === 409) {
-                    document.open();
-                    document.write(await response.text());
-                    document.close();
+                if (response.status === 409) {
+                    updateStaleState(true);
+                    window.alert('Someone else saved this note first. Your changes were not saved.');
+                    return;
                 }
+                if (!response.ok) {
+                    window.alert('The note could not be saved. Please try again.');
+                    return;
+                }
+                window.location.reload();
             } catch (error) {
                 console.error('Save failed:', error);
+                window.alert('The note could not be saved. Please try again.');
             }
+        }
+
+        // Auto-save the note
+        async function autoSave() {
+            if (isStale) {
+                updateStaleState(true);
+                return;
+            }
+            await saveMarkdown(currentMarkdown);
         }
 
         // Show preview mode
@@ -155,18 +160,21 @@
             editorWrap.style.display = 'block';
             previewTab.classList.remove('active');
             editTab.classList.add('active');
-            updateStaleState(latestVersion > loadedVersion && hasLocalEdits);
+            updateStaleState(latestVersion > loadedVersion);
         }
 
         function updateStaleState(stale) {
             isStale = stale;
             staleWarning.hidden = !stale;
-            reviewConflictButton.hidden = !stale;
             saveButton.disabled = stale;
             saveButton.classList.toggle('ghosted', stale);
         }
 
         async function pollVersion() {
+            if (versionCheckInFlight || isStale) {
+                return;
+            }
+            versionCheckInFlight = true;
             try {
                 const response = await fetch(window.location.pathname + '/meta', {
                     headers: { 'Accept': 'application/json' }
@@ -176,11 +184,13 @@
                 }
                 const data = await response.json();
                 latestVersion = data.version;
-                if (latestVersion > loadedVersion && hasLocalEdits) {
+                if (latestVersion > loadedVersion) {
                     updateStaleState(true);
                 }
             } catch (error) {
                 console.error('Version check failed:', error);
+            } finally {
+                versionCheckInFlight = false;
             }
         }
 
@@ -189,16 +199,15 @@
         editTab.addEventListener('click', showEdit);
         editor.addEventListener('input', () => {
             currentMarkdown = editor.value;
-            hasLocalEdits = true;
             updateStaleState(latestVersion > loadedVersion);
         });
-        form.addEventListener('submit', (event) => {
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
             if (isStale) {
-                event.preventDefault();
+                return;
             }
-        });
-        reviewConflictButton.addEventListener('click', () => {
-            HTMLFormElement.prototype.submit.call(form);
+            currentMarkdown = editor.value;
+            await saveMarkdown(currentMarkdown);
         });
         copyLinkTab.addEventListener('click', async () => {
             try {
@@ -215,7 +224,14 @@
 
         // Initialize in preview mode
         renderPreview();
-        setInterval(pollVersion, 5000);
+        pollVersion();
+        setInterval(pollVersion, 1000);
+        window.addEventListener('focus', pollVersion);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                pollVersion();
+            }
+        });
     </script>
 </body>
 </html>
