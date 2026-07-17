@@ -72,7 +72,7 @@ make up
 ```
 
 This will:
-- Build the Flask app (base deployment)
+- Build the Go notes app
 - Build Caddy with rate-limit module (takes ~1 minute, production deployment)
 - Start both containers
 - Caddy will automatically get SSL certificate from Let's Encrypt
@@ -116,8 +116,8 @@ Add:
 ```
 #!/bin/bash
 cd /root/tinymarkdownnotes
-tar -czf /root/backups/notes-$(date +%Y%m%d-%H%M%S).tar.gz notes/
-find /root/backups -name "notes-*.tar.gz" -mtime +7 -delete
+tar -czf /root/backups/notes-data-$(date +%Y%m%d-%H%M%S).tar.gz data/ notes/
+find /root/backups -name "notes-data-*.tar.gz" -mtime +7 -delete
 ```
 
 Save, then:

@@ -167,6 +167,27 @@ button:hover, .save-button:hover {
     margin-top: 10px;
 }
 
+.editor-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.save-button.ghosted,
+.save-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.stale-warning {
+    margin-bottom: 12px;
+    padding: 12px;
+    border: 1px solid #b8893a;
+    border-radius: 4px;
+    background: #2e2616;
+    color: #f0d28a;
+}
+
 .conflict-actions {
     display: flex;
     align-items: center;

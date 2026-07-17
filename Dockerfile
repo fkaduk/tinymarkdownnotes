@@ -1,14 +1,21 @@
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+FROM golang:1.22-bookworm AS build
+
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY main.go ./
+RUN CGO_ENABLED=1 go build -o /out/tinymarkdownnotes .
+
+FROM debian:bookworm-slim
 
 WORKDIR /app
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
-COPY app.py .
+COPY --from=build /out/tinymarkdownnotes /app/tinymarkdownnotes
 COPY templates/ templates/
 COPY static/ static/
-RUN mkdir -p notes
-RUN useradd -m appuser && chown -R appuser:appuser /app
+RUN mkdir -p data notes \
+    && useradd -m appuser \
+    && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 5000
-CMD ["uv", "run", "gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "60", "app:app"]
+CMD ["/app/tinymarkdownnotes"]

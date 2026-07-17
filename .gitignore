@@ -11,6 +11,11 @@ wheels/
 
 # Notes storage
 notes/
+data/
+*.db
+*.db-shm
+*.db-wal
+tinymarkdownnotes
 
 # Backup directory
 backup/

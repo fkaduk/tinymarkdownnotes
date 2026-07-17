@@ -1,5 +1,5 @@
-- this repo uses uv and flask
-- when running pytest through the Bash tool, exit code 120 may occur due to stream flushing issues in the tool's output capture mechanism, but this doesn't indicate actual test failures (running `uv run pytest` directly in a shell returns exit code 0)
+- this repo uses Go and SQLite
+- run tests with `go test ./...`
 - avoid code comments
 - avoid trailing . in prose
 - this project uses caddy

@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Note: {{ slug }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>Note: {{ .Slug }}</title>
+    <link rel="stylesheet" href="{{ staticURL "style.css" }}">
     <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.0.0/dist/markdown-it.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/markdown-it-task-lists@2.1.1/dist/markdown-it-task-lists.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
@@ -22,17 +22,26 @@
 
         <div id="editor-wrap">
             <form method="post">
+                <div id="stale-warning" class="stale-warning" hidden>
+                    This note has changed since you opened it. Review the conflict before saving your draft.
+                </div>
                 <textarea name="markdown" id="editor"></textarea>
-                <input type="hidden" name="version" id="version-field" value="{{ note.version }}">
-                <button type="submit" class="save-button">Save</button>
+                <input type="hidden" name="version" id="version-field" value="{{ .Note.Version }}">
+                <div class="editor-actions">
+                    <button type="submit" class="save-button" id="save-button">Save</button>
+                    <button type="button" class="button-link" id="review-conflict-button" hidden>Review conflict</button>
+                </div>
             </form>
         </div>
     </div>
 
     <script>
         // Initialize data from server
-        let currentMarkdown = {{ note.markdown | tojson }};
-        const currentVersion = {{ note.version }};
+        let currentMarkdown = {{ toJSON .Note.Markdown }};
+        const loadedVersion = {{ .Note.Version }};
+        let latestVersion = loadedVersion;
+        let hasLocalEdits = false;
+        let isStale = false;
 
         // Set share URL (without query params)
         const cleanUrl = window.location.origin + window.location.pathname;
@@ -42,6 +51,10 @@
         const editorWrap = document.getElementById('editor-wrap');
         const editor = document.getElementById('editor');
         const versionField = document.getElementById('version-field');
+        const form = editor.closest('form');
+        const saveButton = document.getElementById('save-button');
+        const staleWarning = document.getElementById('stale-warning');
+        const reviewConflictButton = document.getElementById('review-conflict-button');
         const previewTab = document.getElementById('preview-tab');
         const editTab = document.getElementById('edit-tab');
         const copyLinkTab = document.getElementById('copy-link-tab');
@@ -70,6 +83,10 @@
 
         // Toggle a checkbox in the markdown
         function toggleCheckbox(index, checked) {
+            if (isStale) {
+                updateStaleState(true);
+                return;
+            }
             const lines = currentMarkdown.split('\n');
             let checkboxCount = 0;
 
@@ -86,14 +103,19 @@
             }
 
             currentMarkdown = lines.join('\n');
+            hasLocalEdits = true;
             autoSave();
         }
 
         // Auto-save the note
         async function autoSave() {
+            if (isStale) {
+                updateStaleState(true);
+                return;
+            }
             const formData = new FormData();
             formData.append('markdown', currentMarkdown);
-            formData.append('version', currentVersion);
+            formData.append('version', loadedVersion);
 
             try {
                 const response = await fetch(window.location.pathname, {
@@ -103,6 +125,10 @@
 
                 if (response.ok) {
                     window.location.reload();
+                } else if (response.status === 409) {
+                    document.open();
+                    document.write(await response.text());
+                    document.close();
                 }
             } catch (error) {
                 console.error('Save failed:', error);
@@ -111,7 +137,9 @@
 
         // Show preview mode
         function showPreview() {
-            currentMarkdown = editor.value;
+            if (editorWrap.style.display === 'block') {
+                currentMarkdown = editor.value;
+            }
             renderPreview();
             previewDiv.style.display = 'block';
             editorWrap.style.display = 'none';
@@ -122,16 +150,56 @@
         // Show edit mode
         function showEdit() {
             editor.value = currentMarkdown;
-            versionField.value = currentVersion;
+            versionField.value = loadedVersion;
             previewDiv.style.display = 'none';
             editorWrap.style.display = 'block';
             previewTab.classList.remove('active');
             editTab.classList.add('active');
+            updateStaleState(latestVersion > loadedVersion && hasLocalEdits);
+        }
+
+        function updateStaleState(stale) {
+            isStale = stale;
+            staleWarning.hidden = !stale;
+            reviewConflictButton.hidden = !stale;
+            saveButton.disabled = stale;
+            saveButton.classList.toggle('ghosted', stale);
+        }
+
+        async function pollVersion() {
+            try {
+                const response = await fetch(window.location.pathname + '/meta', {
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (!response.ok) {
+                    return;
+                }
+                const data = await response.json();
+                latestVersion = data.version;
+                if (latestVersion > loadedVersion && hasLocalEdits) {
+                    updateStaleState(true);
+                }
+            } catch (error) {
+                console.error('Version check failed:', error);
+            }
         }
 
         // Tab button listeners
         previewTab.addEventListener('click', showPreview);
         editTab.addEventListener('click', showEdit);
+        editor.addEventListener('input', () => {
+            currentMarkdown = editor.value;
+            hasLocalEdits = true;
+            updateStaleState(latestVersion > loadedVersion);
+        });
+        form.addEventListener('submit', (event) => {
+            if (isStale) {
+                event.preventDefault();
+            }
+        });
+        reviewConflictButton.addEventListener('click', () => {
+            HTMLFormElement.prototype.submit.call(form);
+        });
         copyLinkTab.addEventListener('click', async () => {
             try {
                 await navigator.clipboard.writeText(cleanUrl);
@@ -147,6 +215,7 @@
 
         // Initialize in preview mode
         renderPreview();
+        setInterval(pollVersion, 5000);
     </script>
 </body>
 </html>

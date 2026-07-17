@@ -14,6 +14,7 @@ cp .env.example .env
 For **base deployment**, run:
 
 ```bash
+make init
 docker-compose up -d
 ```
 
@@ -29,8 +30,12 @@ a access the app at your selected domain.
 
 ## Development
 
-This project uses uv, so simply use
-`uv sync` to install dependencies,
-`uv run pytest` to run tests and
-`uv run python app.py` to start the app.
+This project uses Go and SQLite:
 
+```bash
+go test ./...
+go run .
+```
+
+The app stores notes in `data/notes.db`. On startup it imports existing
+`notes/*.json` files without overwriting rows that already exist in SQLite.
