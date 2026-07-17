@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,7 +20,10 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const maxMarkdownBytes = 100_000
+const (
+	defaultAdminKey  = "change-me-in-production"
+	maxMarkdownBytes = 100_000
+)
 
 var slugPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 
@@ -45,26 +48,29 @@ func main() {
 	addr := getenv("ADDR", ":5000")
 	dataDir := getenv("DATA_DIR", "data")
 	dbPath := getenv("NOTES_DB_PATH", filepath.Join(dataDir, "notes.db"))
-	adminKey := getenv("NOTES_ADMIN_KEY", "change-me-in-production")
+	adminKey := getenv("NOTES_ADMIN_KEY", defaultAdminKey)
+	if adminKey == defaultAdminKey {
+		slog.Warn("NOTES_ADMIN_KEY is using the insecure default")
+	}
 
 	app, err := NewApp(dbPath, adminKey)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("initialize app", "error", err)
+		os.Exit(1)
 	}
-	// defer schedules cleanup for when main returns. In normal operation
-	// ListenAndServe runs indefinitely, but explicit ownership is still useful.
+
 	defer app.Close()
 
-	// Using http.Server instead of the convenience function http.ListenAndServe
-	// gives us a place to set timeouts. ReadHeaderTimeout limits how long a slow
-	// or malicious client may take to send its HTTP headers.
 	server := &http.Server{
 		Addr:              addr,
 		Handler:           app.Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	log.Printf("listening on %s", addr)
-	log.Fatal(server.ListenAndServe())
+	slog.Info("listening", "addr", addr)
+	if err := server.ListenAndServe(); err != nil {
+		slog.Error("serve", "error", err)
+		os.Exit(1)
+	}
 }
 
 // getenv returns fallback when a variable is absent, empty, or only whitespace.
@@ -431,7 +437,7 @@ func (a *App) render(w http.ResponseWriter, status int, name string, data any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	if err := a.templates.ExecuteTemplate(w, name, data); err != nil {
-		log.Printf("render %s: %v", name, err)
+		slog.Error("render template", "template", name, "error", err)
 	}
 }
 
