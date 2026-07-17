@@ -20,12 +20,12 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+const maxMarkdownBytes = 100_000
+
 var slugPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 
 //go:embed templates/init_note.md
 var initNoteContent string
-
-const maxMarkdownBytes = 100_000
 
 type App struct {
 	db        *sql.DB
@@ -41,8 +41,6 @@ type Note struct {
 	UpdatedAt string
 }
 
-// main is intentionally small: read configuration, construct the application,
-// connect it to an HTTP server, and start accepting requests.
 func main() {
 	addr := getenv("ADDR", ":5000")
 	dataDir := getenv("DATA_DIR", "data")
