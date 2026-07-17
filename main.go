@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -29,14 +30,11 @@ type App struct {
 	initContent string
 }
 
-// Note is the application's in-memory representation of one database row.
-// SQLite timestamps are scanned as strings because the schema uses TEXT and the
-// application only displays/transports them; it does not calculate with them.
 type Note struct {
 	Slug      string
 	Markdown  string
 	Version   int
-	CreatedAt string
+	CreatedAt string // use actual timestamps in the db ?
 	UpdatedAt string
 }
 
