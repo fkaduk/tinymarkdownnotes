@@ -59,8 +59,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	defer app.Close()
-
 	server := &http.Server{
 		Addr:              addr,
 		Handler:           app.Routes(),
@@ -69,6 +67,9 @@ func main() {
 	slog.Info("listening", "addr", addr)
 	if err := server.ListenAndServe(); err != nil {
 		slog.Error("serve", "error", err)
+		if err := app.Close(); err != nil {
+			slog.Error("close app", "error", err)
+		}
 		os.Exit(1)
 	}
 }
