@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,13 +22,15 @@ import (
 
 var slugPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 
+//go:embed templates/init_note.md
+var initNoteContent string
+
 const maxMarkdownBytes = 100_000
 
 type App struct {
-	db          *sql.DB
-	templates   *template.Template
-	adminKey    string
-	initContent string
+	db        *sql.DB
+	templates *template.Template
+	adminKey  string
 }
 
 type Note struct {
@@ -112,10 +115,6 @@ func NewApp(dbPath, adminKey string) (*App, error) {
 		db.Close()
 		return nil, err
 	}
-	if err := app.loadInitContent(); err != nil {
-		db.Close()
-		return nil, err
-	}
 	return app, nil
 }
 
@@ -178,16 +177,6 @@ func (a *App) loadTemplates() error {
 		return fmt.Errorf("parse templates: %w", err)
 	}
 	a.templates = tmpl
-	return nil
-}
-
-// loadInitContent reads the Markdown appended to every newly created note.
-func (a *App) loadInitContent() error {
-	b, err := os.ReadFile(filepath.Join("templates", "init_note.md"))
-	if err != nil {
-		return fmt.Errorf("read init note template: %w", err)
-	}
-	a.initContent = string(b)
 	return nil
 }
 
@@ -267,7 +256,7 @@ func (a *App) handleCreateNote(w http.ResponseWriter, r *http.Request) {
 
 	// SQL placeholders (?) keep user input separate from the SQL program. Never
 	// build SQL by concatenating form values.
-	markdown := fmt.Sprintf("# %s\n%s", slug, a.initContent)
+	markdown := fmt.Sprintf("# %s\n%s", slug, initNoteContent)
 	res, err := a.db.ExecContext(
 		r.Context(),
 		// OR IGNORE turns a duplicate primary key into zero affected rows, which
