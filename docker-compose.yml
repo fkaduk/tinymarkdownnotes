@@ -6,10 +6,8 @@ services:
     environment:
       - NOTES_ADMIN_KEY=${NOTES_ADMIN_KEY:?set NOTES_ADMIN_KEY in .env}
       - DATA_DIR=/app/data
-      - NOTES_IMPORT_DIR=/app/notes
     volumes:
       - ${DATA_DIR:-./data}:/app/data
-      - ${NOTES_IMPORT_DIR:-./notes}:/app/notes:ro
     restart: unless-stopped
     user: "${NOTES_UID:-1000}:${NOTES_GID:-1000}"
 

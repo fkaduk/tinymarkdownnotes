@@ -3,13 +3,12 @@
 -include .env
 
 DATA_DIR ?= data
-NOTES_IMPORT_DIR ?= notes
 NOTES_UID ?= 1000
 NOTES_GID ?= 1000
 COMPOSE := docker-compose
 
 init:
-	mkdir -p "$(DATA_DIR)" "$(NOTES_IMPORT_DIR)"
+	mkdir -p "$(DATA_DIR)"
 	@if [ ! -w "$(DATA_DIR)" ]; then \
 		echo "Fixing ownership of $(DATA_DIR)"; \
 		sudo chown -R "$(NOTES_UID):$(NOTES_GID)" "$(DATA_DIR)"; \

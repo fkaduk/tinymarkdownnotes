@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -318,31 +317,5 @@ func TestConcurrentSameVersionSavesOnlyOne(t *testing.T) {
 	}
 	if counts[http.StatusSeeOther] != 1 || counts[http.StatusConflict] != 1 {
 		t.Fatalf("statuses = %#v, want one 303 and one 409", counts)
-	}
-}
-
-// The import test creates a real JSON fixture in a temporary directory and then
-// constructs the app, because importing is part of NewApp's startup lifecycle.
-func TestImportJSONNotes(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(dir+"/imported.json", []byte(`{"markdown":"# Imported\n","version":7}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	app, err := NewApp(Config{
-		DBPath:    t.TempDir() + "/notes.db",
-		AdminKey:  "test-admin-key",
-		ImportDir: dir,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer app.Close()
-
-	note, ok, err := app.getNote(context.Background(), "imported")
-	if err != nil || !ok {
-		t.Fatalf("get note ok=%v err=%v", ok, err)
-	}
-	if note.Markdown != "# Imported\n" || note.Version != 7 {
-		t.Fatalf("note = %#v", note)
 	}
 }

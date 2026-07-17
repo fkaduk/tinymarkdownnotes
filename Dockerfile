@@ -12,7 +12,7 @@ WORKDIR /app
 COPY --from=build /out/tinymarkdownnotes /app/tinymarkdownnotes
 COPY templates/ templates/
 COPY static/ static/
-RUN mkdir -p data notes \
+RUN mkdir -p data \
     && useradd -m appuser \
     && chown -R appuser:appuser /app
 USER appuser

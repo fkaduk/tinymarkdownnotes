@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -42,10 +41,9 @@ const maxMarkdownBytes = 100_000
 // Keeping configuration separate makes NewApp easy to use from both main and
 // tests without changing process-wide environment variables.
 type Config struct {
-	Addr      string
-	DBPath    string
-	ImportDir string
-	AdminKey  string
+	Addr     string
+	DBPath   string
+	AdminKey string
 }
 
 // App owns the long-lived dependencies shared by all HTTP requests. Handler
@@ -67,14 +65,6 @@ type Note struct {
 	Version   int
 	CreatedAt string
 	UpdatedAt string
-}
-
-// noteJSON describes the old JSON-on-disk format accepted by the importer.
-// The struct tags define the lowercase keys used by encoding/json. The type is
-// unexported because it is an implementation detail of this package.
-type noteJSON struct {
-	Markdown string `json:"markdown"`
-	Version  int    `json:"version"`
 }
 
 // main is intentionally small: read configuration, construct the application,
@@ -107,10 +97,9 @@ func main() {
 func configFromEnv() Config {
 	dataDir := getenv("DATA_DIR", "data")
 	return Config{
-		Addr:      getenv("ADDR", ":5000"),
-		DBPath:    getenv("NOTES_DB_PATH", filepath.Join(dataDir, "notes.db")),
-		ImportDir: getenv("NOTES_IMPORT_DIR", "notes"),
-		AdminKey:  getenv("NOTES_ADMIN_KEY", "change-me-in-production"),
+		Addr:     getenv("ADDR", ":5000"),
+		DBPath:   getenv("NOTES_DB_PATH", filepath.Join(dataDir, "notes.db")),
+		AdminKey: getenv("NOTES_ADMIN_KEY", "change-me-in-production"),
 	}
 }
 
@@ -163,12 +152,6 @@ func NewApp(cfg Config) (*App, error) {
 	if err := app.loadInitContent(); err != nil {
 		db.Close()
 		return nil, err
-	}
-	if cfg.ImportDir != "" {
-		if err := app.importJSONNotes(context.Background(), cfg.ImportDir); err != nil {
-			db.Close()
-			return nil, err
-		}
 	}
 	return app, nil
 }
@@ -288,7 +271,7 @@ func (a *App) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// validateSlug is shared by create, view, update, and import paths so all entry
+// validateSlug is shared by create, view, and update paths so all entry
 // points enforce exactly the same note-name rules.
 func validateSlug(slug string) bool {
 	return slugPattern.MatchString(slug)
@@ -508,62 +491,9 @@ func alertBack(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	fmt.Fprintf(w, `
-		<script>
-			alert(%q);
-			window.history.back();
-		</script>
-	`, message)
-}
-
-// importJSONNotes performs a one-way compatibility import from JSON files. It is
-// run at startup and uses INSERT OR IGNORE so existing database notes win.
-func (a *App) importJSONNotes(ctx context.Context, dir string) error {
-	entries, err := os.ReadDir(dir)
-	// A missing optional import directory is normal, not a startup failure.
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("read import directory: %w", err)
-	}
-	for _, entry := range entries {
-		// Ignore subdirectories and unrelated files rather than treating them as
-		// malformed notes.
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
-			continue
-		}
-		// The filename (minus .json) becomes the URL slug.
-		slug := strings.TrimSuffix(entry.Name(), ".json")
-		if !validateSlug(slug) {
-			return fmt.Errorf("invalid note filename %q", entry.Name())
-		}
-		path := filepath.Join(dir, entry.Name())
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("read note %s: %w", entry.Name(), err)
-		}
-		var imported noteJSON
-		// Unmarshal validates JSON syntax and fills fields according to struct tags.
-		if err := json.Unmarshal(b, &imported); err != nil {
-			return fmt.Errorf("parse note %s: %w", entry.Name(), err)
-		}
-		if imported.Version <= 0 {
-			return fmt.Errorf("note %s has invalid version %d", entry.Name(), imported.Version)
-		}
-		if len(imported.Markdown) > maxMarkdownBytes {
-			return fmt.Errorf("note %s exceeds max markdown size", entry.Name())
-		}
-		// Existing rows are deliberately not overwritten during repeated startups.
-		_, err = a.db.ExecContext(
-			ctx,
-			`INSERT OR IGNORE INTO notes (slug, markdown, version) VALUES (?, ?, ?)`,
-			slug,
-			imported.Markdown,
-			imported.Version,
-		)
-		if err != nil {
-			return fmt.Errorf("import note %s: %w", entry.Name(), err)
-		}
-	}
-	return nil
+			<script>
+				alert(%q);
+				window.history.back();
+			</script>
+		`, message)
 }

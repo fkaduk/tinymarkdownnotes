@@ -48,5 +48,4 @@ go test ./...
 go run .
 ```
 
-The app stores notes in `data/notes.db`. On startup it imports existing
-`notes/*.json` files without overwriting rows that already exist in SQLite.
+The app stores notes in `data/notes.db`.
