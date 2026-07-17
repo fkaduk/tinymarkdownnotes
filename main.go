@@ -1,7 +1,3 @@
-// Package main contains the complete Tiny Markdown Notes web application.
-//
-// A package named main, together with a main function, tells Go to build an
-// executable program rather than a library that other Go packages import.
 package main
 
 import (
@@ -19,36 +15,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	// database/sql defines a common database API, but it does not contain a
-	// SQLite implementation. This blank import runs go-sqlite3's init function,
-	// which registers the driver name "sqlite3" with database/sql. No exported
-	// symbol from the package needs to be called directly.
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// slugPattern limits note names to characters that are safe and predictable in
-// both URLs and filenames. MustCompile is appropriate for a constant pattern:
-// a typo is a programming error, so startup should panic instead of continuing.
 var slugPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 
-// maxMarkdownBytes is a byte limit, not a character limit. Go's len function
-// returns the number of bytes in a string; a non-ASCII character may use more
-// than one byte in UTF-8.
 const maxMarkdownBytes = 100_000
 
-// Config contains values that can differ between development and deployment.
-// Keeping configuration separate makes NewApp easy to use from both main and
-// tests without changing process-wide environment variables.
-type Config struct {
-	Addr     string
-	DBPath   string
-	AdminKey string
-}
-
-// App owns the long-lived dependencies shared by all HTTP requests. Handler
-// methods use a pointer receiver (*App) so they all refer to this same database
-// pool, parsed template set, and configuration.
 type App struct {
 	db          *sql.DB
 	templates   *template.Template
@@ -70,8 +43,12 @@ type Note struct {
 // main is intentionally small: read configuration, construct the application,
 // connect it to an HTTP server, and start accepting requests.
 func main() {
-	cfg := configFromEnv()
-	app, err := NewApp(cfg)
+	addr := getenv("ADDR", ":5000")
+	dataDir := getenv("DATA_DIR", "data")
+	dbPath := getenv("NOTES_DB_PATH", filepath.Join(dataDir, "notes.db"))
+	adminKey := getenv("NOTES_ADMIN_KEY", "change-me-in-production")
+
+	app, err := NewApp(dbPath, adminKey)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -83,24 +60,12 @@ func main() {
 	// gives us a place to set timeouts. ReadHeaderTimeout limits how long a slow
 	// or malicious client may take to send its HTTP headers.
 	server := &http.Server{
-		Addr:              cfg.Addr,
+		Addr:              addr,
 		Handler:           app.Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	log.Printf("listening on %s", cfg.Addr)
+	log.Printf("listening on %s", addr)
 	log.Fatal(server.ListenAndServe())
-}
-
-// configFromEnv translates environment variables into a typed Config. Defaults
-// make the program convenient to run locally while allowing containers and
-// production deployments to choose persistent paths and a different address.
-func configFromEnv() Config {
-	dataDir := getenv("DATA_DIR", "data")
-	return Config{
-		Addr:     getenv("ADDR", ":5000"),
-		DBPath:   getenv("NOTES_DB_PATH", filepath.Join(dataDir, "notes.db")),
-		AdminKey: getenv("NOTES_ADMIN_KEY", "change-me-in-production"),
-	}
 }
 
 // getenv returns fallback when a variable is absent, empty, or only whitespace.
@@ -117,17 +82,17 @@ func getenv(key, fallback string) string {
 // NewApp constructs a fully initialized application. Constructors in Go are
 // ordinary functions by convention; the language has no special constructor
 // syntax. Returning (*App, error) makes initialization failures explicit.
-func NewApp(cfg Config) (*App, error) {
-	if cfg.DBPath == "" {
+func NewApp(dbPath, adminKey string) (*App, error) {
+	if dbPath == "" {
 		return nil, errors.New("database path is required")
 	}
-	if err := os.MkdirAll(filepath.Dir(cfg.DBPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		return nil, fmt.Errorf("create database directory: %w", err)
 	}
 
 	// sql.Open creates a database handle (which is also a connection pool). The
 	// query-string options configure each SQLite connection created by the driver.
-	db, err := sql.Open("sqlite3", cfg.DBPath+"?_busy_timeout=5000&_foreign_keys=1")
+	db, err := sql.Open("sqlite3", dbPath+"?_busy_timeout=5000&_foreign_keys=1")
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
@@ -135,7 +100,7 @@ func NewApp(cfg Config) (*App, error) {
 	// this tiny application simple and avoids competing writers in one process.
 	db.SetMaxOpenConns(1)
 
-	app := &App{db: db, adminKey: cfg.AdminKey}
+	app := &App{db: db, adminKey: adminKey}
 	// Startup work uses a background context because it is not associated with an
 	// incoming request. Request handlers use r.Context() instead, so their database
 	// operations are cancelled if the client disconnects.

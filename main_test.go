@@ -22,10 +22,7 @@ func newTestApp(t *testing.T) *App {
 	// Helper marks this as test support code. If it calls t.Fatal, Go reports the
 	// caller's line as the failure location instead of a line inside this helper.
 	t.Helper()
-	app, err := NewApp(Config{
-		DBPath:   t.TempDir() + "/notes.db",
-		AdminKey: "test-admin-key",
-	})
+	app, err := NewApp(t.TempDir()+"/notes.db", "test-admin-key")
 	if err != nil {
 		t.Fatal(err)
 	}
