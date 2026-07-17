@@ -1,12 +1,12 @@
-FROM golang:1.22-bookworm AS build
+FROM golang:1.26.5-bookworm AS build
 
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY main.go ./
-RUN CGO_ENABLED=1 go build -o /out/tinymarkdownnotes .
+RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/tinymarkdownnotes .
 
-FROM debian:bookworm-slim
+FROM debian:12-slim
 
 WORKDIR /app
 COPY --from=build /out/tinymarkdownnotes /app/tinymarkdownnotes
