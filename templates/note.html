@@ -1,16 +1,26 @@
 <!DOCTYPE html>
+<!--
+    Go renders this template after loading a Note from SQLite. The JavaScript
+    below then turns the server-rendered page into a small interactive editor.
+-->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Note: {{ .Slug }}</title>
     <link rel="stylesheet" href="{{ staticURL "style.css" }}">
+    <!--
+        markdown-it converts Markdown to HTML, the task-list plugin recognizes
+        checkboxes, and DOMPurify sanitizes generated HTML before it enters the
+        document. They are loaded in dependency order.
+    -->
     <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.0.0/dist/markdown-it.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/markdown-it-task-lists@2.1.1/dist/markdown-it-task-lists.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
 </head>
 <body>
     <div class="container">
+        <!-- These buttons switch client-side views; they do not navigate. -->
         <div class="tabs">
             <button class="tab-button active" id="preview-tab">View</button>
             <button class="tab-button" id="edit-tab">Edit</button>
@@ -18,14 +28,22 @@
             <button class="tab-button" id="copy-link-tab">📋 Copy link</button>
         </div>
 
+        <!-- Markdown is rendered into this initially empty element. -->
         <div id="preview"></div>
 
+        <!-- CSS initially hides the editor and JavaScript reveals it on demand. -->
         <div id="editor-wrap">
+            <!-- With JavaScript unavailable, this still behaves as a normal POST form. -->
             <form method="post">
+                <!-- hidden is a native boolean HTML attribute toggled by JavaScript. -->
                 <div id="stale-warning" class="stale-warning" hidden>
                     Someone else saved this note. Your changes cannot be saved from this tab.
                 </div>
                 <textarea name="markdown" id="editor"></textarea>
+                <!--
+                    The version travels with the edit. The server only updates a
+                    row whose current version still equals this value.
+                -->
                 <input type="hidden" name="version" id="version-field" value="{{ .Note.Version }}">
                 <div class="editor-actions">
                     <button type="submit" class="save-button" id="save-button">Save</button>
@@ -35,17 +53,29 @@
     </div>
 
     <script>
-        // Initialize data from server
+        // Go renders these two template expressions as JavaScript values. toJSON
+        // safely quotes Markdown, including newlines and quote characters.
         let currentMarkdown = {{ toJSON .Note.Markdown }};
         const loadedVersion = {{ .Note.Version }};
+
+        // loadedVersion never changes during this page's lifetime. latestVersion
+        // records what polling most recently saw on the server.
         let latestVersion = loadedVersion;
+
+        // Once stale, this tab may no longer save. Reloading creates a fresh page
+        // with the latest Markdown and version.
         let isStale = false;
+
+        // A slow request could last longer than the one-second poll interval.
+        // This flag prevents overlapping metadata requests from piling up.
         let versionCheckInFlight = false;
 
-        // Set share URL (without query params)
+        // origin is scheme + host; pathname excludes query parameters. Sharing
+        // this clean URL avoids leaking unrelated query data.
         const cleanUrl = window.location.origin + window.location.pathname;
 
-        // Get DOM elements
+        // Cache element references once rather than searching the DOM every time
+        // a button is clicked or a poll completes.
         const previewDiv = document.getElementById('preview');
         const editorWrap = document.getElementById('editor-wrap');
         const editor = document.getElementById('editor');
@@ -57,20 +87,24 @@
         const editTab = document.getElementById('edit-tab');
         const copyLinkTab = document.getElementById('copy-link-tab');
 
-        // Configure markdown-it
+        // Configure the Markdown parser. Raw HTML is disabled as an additional
+        // safety measure; DOMPurify below remains the final sanitization layer.
         const md = window.markdownit({
             html: false,
             breaks: true,
             linkify: true
         }).use(window.markdownitTaskLists, {enabled: true});
 
-        // Render markdown to preview
+        // renderPreview follows a deliberate text -> HTML -> sanitized HTML flow.
         function renderPreview() {
             const rawHtml = md.render(currentMarkdown);
             const cleanHtml = DOMPurify.sanitize(rawHtml);
+
+            // innerHTML is safe here because cleanHtml has just been sanitized.
             previewDiv.innerHTML = cleanHtml;
 
-            // Attach checkbox listeners
+            // Rendering replaces the previous DOM nodes, so checkbox listeners
+            // must be attached again after every render.
             const checkboxes = previewDiv.querySelectorAll('input[type="checkbox"].task-list-item-checkbox');
             checkboxes.forEach((checkbox, index) => {
                 checkbox.addEventListener('click', (e) => {
@@ -79,8 +113,10 @@
             });
         }
 
-        // Toggle a checkbox in the markdown
+        // A preview checkbox is derived from Markdown, so changing the checkbox
+        // must also update its corresponding source line before saving.
         function toggleCheckbox(index, checked) {
+            // Never create a local edit after this tab is known to be stale.
             if (isStale) {
                 updateStaleState(true);
                 return;
@@ -88,11 +124,13 @@
             const lines = currentMarkdown.split('\n');
             let checkboxCount = 0;
 
+            // Walk task-list lines in document order. checkboxCount maps the DOM
+            // checkbox index back to the same checkbox in the Markdown source.
             for (let i = 0; i < lines.length; i++) {
-                // Match task list: - [ ] or - [x] or - [X]
+                // Match task-list markers such as - [ ], * [x], or + [X].
                 if (lines[i].match(/^(\s*[-*+])\s+\[[ xX]\]/)) {
                     if (checkboxCount === index) {
-                        // Toggle this checkbox
+                        // Replace only the [ ]/[x] marker, preserving the text.
                         lines[i] = lines[i].replace(/\[[ xX]\]/, checked ? '[x]' : '[ ]');
                         break;
                     }
@@ -101,37 +139,51 @@
             }
 
             currentMarkdown = lines.join('\n');
+            // Preview checkboxes save immediately instead of requiring Edit/Save.
             autoSave();
         }
 
+        // saveMarkdown is shared by the explicit Save button and checkbox
+        // auto-save. async/await makes the asynchronous fetch read sequentially.
         async function saveMarkdown(markdown) {
+            // FormData uses the same field names as the ordinary HTML form, so a
+            // single Go handler supports both JavaScript and non-JavaScript posts.
             const formData = new FormData();
             formData.append('markdown', markdown);
             formData.append('version', loadedVersion);
 
             try {
+                // fetch sends the request without leaving the current page. Go's
+                // successful 303 redirect is followed automatically by fetch.
                 const response = await fetch(window.location.pathname, {
                     method: 'POST',
                     body: formData
                 });
 
+                // 409 is the optimistic-concurrency fallback. Keep the draft in
+                // the textarea, alert the user, and permanently disable this tab.
                 if (response.status === 409) {
                     updateStaleState(true);
                     window.alert('Someone else saved this note first. Your changes were not saved.');
                     return;
                 }
+                // Network success does not imply HTTP success; response.ok covers
+                // status codes in the 200-299 range after redirect handling.
                 if (!response.ok) {
                     window.alert('The note could not be saved. Please try again.');
                     return;
                 }
+                // Reload to obtain the new version number and server-authoritative
+                // Markdown after a successful save.
                 window.location.reload();
             } catch (error) {
+                // fetch rejects for network failures, not ordinary 4xx/5xx status.
                 console.error('Save failed:', error);
                 window.alert('The note could not be saved. Please try again.');
             }
         }
 
-        // Auto-save the note
+        // Checkbox auto-save performs the same stale guard as the form handler.
         async function autoSave() {
             if (isStale) {
                 updateStaleState(true);
@@ -140,7 +192,8 @@
             await saveMarkdown(currentMarkdown);
         }
 
-        // Show preview mode
+        // showPreview copies any textarea changes into application state, renders
+        // them, and switches visibility/classes without a server round trip.
         function showPreview() {
             if (editorWrap.style.display === 'block') {
                 currentMarkdown = editor.value;
@@ -152,7 +205,8 @@
             editTab.classList.remove('active');
         }
 
-        // Show edit mode
+        // showEdit copies application state into the textarea. textareas use their
+        // value property for current content rather than innerHTML.
         function showEdit() {
             editor.value = currentMarkdown;
             versionField.value = loadedVersion;
@@ -163,6 +217,8 @@
             updateStaleState(latestVersion > loadedVersion);
         }
 
+        // Keep all stale-related UI changes in one function so every detection
+        // path produces the same warning and disabled button.
         function updateStaleState(stale) {
             isStale = stale;
             staleWarning.hidden = !stale;
@@ -170,12 +226,15 @@
             saveButton.classList.toggle('ghosted', stale);
         }
 
+        // pollVersion asks the small JSON endpoint whether another browser has
+        // saved since this page loaded.
         async function pollVersion() {
             if (versionCheckInFlight || isStale) {
                 return;
             }
             versionCheckInFlight = true;
             try {
+                // The Accept header documents that this caller expects JSON.
                 const response = await fetch(window.location.pathname + '/meta', {
                     headers: { 'Accept': 'application/json' }
                 });
@@ -184,17 +243,22 @@
                 }
                 const data = await response.json();
                 latestVersion = data.version;
+
+                // Versions only increase, so greater-than means this page is old.
                 if (latestVersion > loadedVersion) {
                     updateStaleState(true);
                 }
             } catch (error) {
+                // A transient poll failure should not disrupt reading/editing. A
+                // later poll or the server's 409 guard still protects the note.
                 console.error('Version check failed:', error);
             } finally {
+                // finally runs after success, early return, or exception.
                 versionCheckInFlight = false;
             }
         }
 
-        // Tab button listeners
+        // Event listeners connect user/browser events to the functions above.
         previewTab.addEventListener('click', showPreview);
         editTab.addEventListener('click', showEdit);
         editor.addEventListener('input', () => {
@@ -202,6 +266,7 @@
             updateStaleState(latestVersion > loadedVersion);
         });
         form.addEventListener('submit', async (event) => {
+            // Stop normal page navigation so this handler can process 409 inline.
             event.preventDefault();
             if (isStale) {
                 return;
@@ -211,6 +276,8 @@
         });
         copyLinkTab.addEventListener('click', async () => {
             try {
+                // Clipboard access is asynchronous and generally requires HTTPS
+                // (localhost is also treated as a secure development context).
                 await navigator.clipboard.writeText(cleanUrl);
                 const originalText = copyLinkTab.textContent;
                 copyLinkTab.textContent = '✓ Copied';
@@ -222,7 +289,9 @@
             }
         });
 
-        // Initialize in preview mode
+        // Initial page setup: render immediately, check the version immediately,
+        // then poll once per second. Focus/visibility checks cover browser timer
+        // throttling while a tab is in the background.
         renderPreview();
         pollVersion();
         setInterval(pollVersion, 1000);

@@ -1,11 +1,19 @@
 <!DOCTYPE html>
+<!--
+    This is a Go html/template file. Most of it is ordinary HTML; expressions
+    inside double braces are evaluated by the Go server before the response is
+    sent to the browser.
+-->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- Make CSS pixels track the device width on phones and tablets. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tiny Markdown Notes</title>
+    <!-- staticURL is a Go template helper registered in loadTemplates. -->
     <link rel="stylesheet" href="{{ staticURL "style.css" }}">
     <style>
+        /* This page-specific rule supplements the shared stylesheet. */
         input[type="text"] {
             width: 300px;
         }
@@ -14,7 +22,15 @@
 <body>
     <div class="container">
         <h1>Tiny Markdown Notes</h1>
+        <!--
+            A normal HTML form sends an application/x-www-form-urlencoded POST
+            request. The action matches POST /notes in the Go router.
+        -->
         <form action="/notes" method="POST">
+            <!--
+                pattern and required provide immediate browser validation. The
+                server still validates the slug because clients can bypass HTML.
+            -->
             <input type="text" name="slug"
                    placeholder="note-name"
                    pattern="[a-zA-Z0-9_-]{1,64}"

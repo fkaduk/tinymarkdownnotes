@@ -1,5 +1,8 @@
 package main
 
+// Tests use Go's standard testing and httptest packages. Because this file is in
+// package main (rather than main_test), it can also exercise unexported helpers
+// such as getNote and validateSlug.
 import (
 	"context"
 	"encoding/base64"
@@ -13,7 +16,12 @@ import (
 	"testing"
 )
 
+// newTestApp creates an isolated application for each test. t.TempDir returns a
+// unique temporary directory and removes it automatically after the test, so a
+// test never reads or modifies the real notes database.
 func newTestApp(t *testing.T) *App {
+	// Helper marks this as test support code. If it calls t.Fatal, Go reports the
+	// caller's line as the failure location instead of a line inside this helper.
 	t.Helper()
 	app, err := NewApp(Config{
 		DBPath:   t.TempDir() + "/notes.db",
@@ -22,6 +30,8 @@ func newTestApp(t *testing.T) *App {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// t.Cleanup is the test equivalent of defer, but registered cleanup also runs
+	// when a helper returns control to its caller.
 	t.Cleanup(func() {
 		if err := app.Close(); err != nil {
 			t.Fatal(err)
@@ -30,6 +40,8 @@ func newTestApp(t *testing.T) *App {
 	return app
 }
 
+// createTestNote inserts fixture data directly. Tests for viewing and updating
+// do not need to repeat the separate HTTP creation flow in their setup.
 func createTestNote(t *testing.T, app *App, slug, markdown string, version int) {
 	t.Helper()
 	if markdown == "" {
@@ -46,22 +58,32 @@ func createTestNote(t *testing.T, app *App, slug, markdown string, version int) 
 	}
 }
 
+// authHeader builds the Basic Authentication header expected by requireAuth.
+// Basic Auth encodes "username:password" with base64; it is encoding, not
+// encryption, which is why a deployed app must be served over HTTPS.
 func authHeader() string {
 	credentials := base64.StdEncoding.EncodeToString([]byte(":test-admin-key"))
 	return "Basic " + credentials
 }
 
+// formRequest sends an in-memory form request through the real router. Recorder
+// captures the status, headers, and body without opening a network port.
 func formRequest(app *App, method, path string, values url.Values, auth bool) *httptest.ResponseRecorder {
+	// url.Values.Encode creates an application/x-www-form-urlencoded request body.
 	req := httptest.NewRequest(method, path, strings.NewReader(values.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	if auth {
 		req.Header.Set("Authorization", authHeader())
 	}
 	rr := httptest.NewRecorder()
+	// Calling ServeHTTP directly is fast and deterministic while still exercising
+	// routing, middleware, handlers, templates, and the database together.
 	app.Routes().ServeHTTP(rr, req)
 	return rr
 }
 
+// The first tests cover ordinary HTTP behavior: missing resources, successful
+// rendering, validation, authentication, and redirects.
 func TestViewNonexistentNoteReturns404(t *testing.T) {
 	app := newTestApp(t)
 	req := httptest.NewRequest(http.MethodGet, "/notes/doesnotexist", nil)
@@ -104,6 +126,8 @@ func TestInvalidSlugsAreRejected(t *testing.T) {
 		"/notes/" + strings.Repeat("a", 65),
 	}
 
+	// A table-driven loop applies the same assertion to several inputs. This is a
+	// common Go testing style and makes adding another case inexpensive.
 	for _, path := range invalidPaths {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		rr := httptest.NewRecorder()
@@ -171,6 +195,9 @@ func TestEditNoteWithCorrectVersion(t *testing.T) {
 	}
 }
 
+// A mismatched version must produce 409 Conflict instead of overwriting a newer
+// edit. Client-side JavaScript improves the UX, but this server test proves the
+// data-protection rule does not depend on JavaScript.
 func TestEditWithWrongVersionReturnsConflict(t *testing.T) {
 	app := newTestApp(t)
 	createTestNote(t, app, "conflict-test", "", 1)
@@ -188,6 +215,8 @@ func TestEditWithWrongVersionReturnsConflict(t *testing.T) {
 	}
 }
 
+// Request size limits are tested at the HTTP boundary where callers observe
+// them. 413 is the standard status for a payload the server refuses as too large.
 func TestEditNoteTooLargeReturns413(t *testing.T) {
 	app := newTestApp(t)
 	createTestNote(t, app, "large-test", "", 1)
@@ -202,6 +231,7 @@ func TestEditNoteTooLargeReturns413(t *testing.T) {
 	}
 }
 
+// The meta endpoint is intentionally small JSON used by browser polling.
 func TestNoteMetaReturnsLatestVersion(t *testing.T) {
 	app := newTestApp(t)
 	createTestNote(t, app, "meta-test", "", 4)
@@ -213,6 +243,8 @@ func TestNoteMetaReturnsLatestVersion(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 	}
+	// An anonymous struct is useful when a test only needs one field and does not
+	// warrant a reusable named type.
 	var payload struct {
 		Version int `json:"version"`
 	}
@@ -224,6 +256,8 @@ func TestNoteMetaReturnsLatestVersion(t *testing.T) {
 	}
 }
 
+// This test verifies both halves of a rejected save: the HTTP response reports a
+// conflict and the persisted row remains unchanged.
 func TestStalePostRejectedEvenWithoutClientGuard(t *testing.T) {
 	app := newTestApp(t)
 	createTestNote(t, app, "stale-test", "# Current\n", 2)
@@ -245,15 +279,22 @@ func TestStalePostRejectedEvenWithoutClientGuard(t *testing.T) {
 	}
 }
 
+// TestConcurrentSameVersionSavesOnlyOne exercises the race the version column is
+// designed to prevent. Both goroutines begin with the same version, but the
+// atomic SQL predicate permits exactly one update.
 func TestConcurrentSameVersionSavesOnlyOne(t *testing.T) {
 	app := newTestApp(t)
 	createTestNote(t, app, "race-test", "# Original\n", 1)
 	handler := app.Routes()
 
+	// WaitGroup waits for both goroutines. The buffered channel lets each one send
+	// a status without blocking while the main test goroutine is waiting.
 	var wg sync.WaitGroup
 	statuses := make(chan int, 2)
 	for _, markdown := range []string{"# First\n", "# Second\n"} {
 		wg.Add(1)
+		// Passing markdown as an argument gives each goroutine its own value and
+		// makes the intended capture explicit.
 		go func(markdown string) {
 			defer wg.Done()
 			req := httptest.NewRequest(http.MethodPost, "/notes/race-test", strings.NewReader(url.Values{
@@ -267,6 +308,8 @@ func TestConcurrentSameVersionSavesOnlyOne(t *testing.T) {
 		}(markdown)
 	}
 	wg.Wait()
+	// A channel is closed by its sender once no more values can arrive. Closing it
+	// lets the range loop below terminate naturally.
 	close(statuses)
 
 	counts := map[int]int{}
@@ -278,6 +321,8 @@ func TestConcurrentSameVersionSavesOnlyOne(t *testing.T) {
 	}
 }
 
+// The import test creates a real JSON fixture in a temporary directory and then
+// constructs the app, because importing is part of NewApp's startup lifecycle.
 func TestImportJSONNotes(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(dir+"/imported.json", []byte(`{"markdown":"# Imported\n","version":7}`), 0o644); err != nil {

@@ -1,3 +1,7 @@
+// Package main contains the complete Tiny Markdown Notes web application.
+//
+// A package named main, together with a main function, tells Go to build an
+// executable program rather than a library that other Go packages import.
 package main
 
 import (
@@ -17,13 +21,26 @@ import (
 	"strings"
 	"time"
 
+	// database/sql defines a common database API, but it does not contain a
+	// SQLite implementation. This blank import runs go-sqlite3's init function,
+	// which registers the driver name "sqlite3" with database/sql. No exported
+	// symbol from the package needs to be called directly.
 	_ "github.com/mattn/go-sqlite3"
 )
 
+// slugPattern limits note names to characters that are safe and predictable in
+// both URLs and filenames. MustCompile is appropriate for a constant pattern:
+// a typo is a programming error, so startup should panic instead of continuing.
 var slugPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 
-const maxMarkdownSize = 100_000
+// maxMarkdownBytes is a byte limit, not a character limit. Go's len function
+// returns the number of bytes in a string; a non-ASCII character may use more
+// than one byte in UTF-8.
+const maxMarkdownBytes = 100_000
 
+// Config contains values that can differ between development and deployment.
+// Keeping configuration separate makes NewApp easy to use from both main and
+// tests without changing process-wide environment variables.
 type Config struct {
 	Addr      string
 	DBPath    string
@@ -31,6 +48,9 @@ type Config struct {
 	AdminKey  string
 }
 
+// App owns the long-lived dependencies shared by all HTTP requests. Handler
+// methods use a pointer receiver (*App) so they all refer to this same database
+// pool, parsed template set, and configuration.
 type App struct {
 	db          *sql.DB
 	templates   *template.Template
@@ -38,6 +58,9 @@ type App struct {
 	initContent string
 }
 
+// Note is the application's in-memory representation of one database row.
+// SQLite timestamps are scanned as strings because the schema uses TEXT and the
+// application only displays/transports them; it does not calculate with them.
 type Note struct {
 	Slug      string
 	Markdown  string
@@ -46,19 +69,29 @@ type Note struct {
 	UpdatedAt string
 }
 
+// noteJSON describes the old JSON-on-disk format accepted by the importer.
+// The struct tags define the lowercase keys used by encoding/json. The type is
+// unexported because it is an implementation detail of this package.
 type noteJSON struct {
 	Markdown string `json:"markdown"`
 	Version  int    `json:"version"`
 }
 
+// main is intentionally small: read configuration, construct the application,
+// connect it to an HTTP server, and start accepting requests.
 func main() {
 	cfg := configFromEnv()
 	app, err := NewApp(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
+	// defer schedules cleanup for when main returns. In normal operation
+	// ListenAndServe runs indefinitely, but explicit ownership is still useful.
 	defer app.Close()
 
+	// Using http.Server instead of the convenience function http.ListenAndServe
+	// gives us a place to set timeouts. ReadHeaderTimeout limits how long a slow
+	// or malicious client may take to send its HTTP headers.
 	server := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           app.Routes(),
@@ -68,6 +101,9 @@ func main() {
 	log.Fatal(server.ListenAndServe())
 }
 
+// configFromEnv translates environment variables into a typed Config. Defaults
+// make the program convenient to run locally while allowing containers and
+// production deployments to choose persistent paths and a different address.
 func configFromEnv() Config {
 	dataDir := getenv("DATA_DIR", "data")
 	return Config{
@@ -78,6 +114,9 @@ func configFromEnv() Config {
 	}
 }
 
+// getenv returns fallback when a variable is absent, empty, or only whitespace.
+// Trimming here also avoids surprising values such as an address with a trailing
+// newline copied from a secret file.
 func getenv(key, fallback string) string {
 	value := strings.TrimSpace(os.Getenv(key))
 	if value == "" {
@@ -86,6 +125,9 @@ func getenv(key, fallback string) string {
 	return value
 }
 
+// NewApp constructs a fully initialized application. Constructors in Go are
+// ordinary functions by convention; the language has no special constructor
+// syntax. Returning (*App, error) makes initialization failures explicit.
 func NewApp(cfg Config) (*App, error) {
 	if cfg.DBPath == "" {
 		return nil, errors.New("database path is required")
@@ -94,14 +136,23 @@ func NewApp(cfg Config) (*App, error) {
 		return nil, fmt.Errorf("create database directory: %w", err)
 	}
 
+	// sql.Open creates a database handle (which is also a connection pool). The
+	// query-string options configure each SQLite connection created by the driver.
 	db, err := sql.Open("sqlite3", cfg.DBPath+"?_busy_timeout=5000&_foreign_keys=1")
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
+	// SQLite permits many readers but only one writer. A one-connection pool keeps
+	// this tiny application simple and avoids competing writers in one process.
 	db.SetMaxOpenConns(1)
 
 	app := &App{db: db, adminKey: cfg.AdminKey}
+	// Startup work uses a background context because it is not associated with an
+	// incoming request. Request handlers use r.Context() instead, so their database
+	// operations are cancelled if the client disconnects.
 	if err := app.configureDatabase(context.Background()); err != nil {
+		// A partially initialized App is not returned, so NewApp must release the
+		// resources it has already acquired on every error path.
 		db.Close()
 		return nil, err
 	}
@@ -122,17 +173,26 @@ func NewApp(cfg Config) (*App, error) {
 	return app, nil
 }
 
+// Close releases the application's database resources. Exposing this method
+// makes ownership clear to main and lets tests register cleanup with t.Cleanup.
 func (a *App) Close() error {
 	return a.db.Close()
 }
 
+// configureDatabase applies SQLite settings and creates the schema. Every SQL
+// statement is safe to run again, so restarting the application is harmless.
 func (a *App) configureDatabase(ctx context.Context) error {
+	// WAL (write-ahead logging) allows readers to continue while a write commits.
 	if _, err := a.db.ExecContext(ctx, `PRAGMA journal_mode = WAL`); err != nil {
 		return fmt.Errorf("enable wal: %w", err)
 	}
+	// A busy timeout asks SQLite to wait briefly for a lock instead of immediately
+	// returning "database is locked" during a short overlap.
 	if _, err := a.db.ExecContext(ctx, `PRAGMA busy_timeout = 5000`); err != nil {
 		return fmt.Errorf("set busy timeout: %w", err)
 	}
+	// IF NOT EXISTS makes schema creation idempotent. Database constraints provide
+	// a final line of defense even if a future caller bypasses HTTP validation.
 	_, err := a.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS notes (
 			slug TEXT PRIMARY KEY,
@@ -148,11 +208,20 @@ func (a *App) configureDatabase(ctx context.Context) error {
 	return nil
 }
 
+// loadTemplates parses every HTML template once during startup. Parsing once is
+// faster than reparsing per request and turns template syntax errors into clear
+// startup failures.
 func (a *App) loadTemplates() error {
+	// FuncMap exposes small Go helpers to templates. It must be attached before
+	// ParseGlob because templates resolve function names while they are parsed.
 	funcs := template.FuncMap{
+		// staticURL centralizes the public URL prefix for CSS and other assets.
 		"staticURL": func(name string) string {
 			return "/static/" + strings.TrimLeft(name, "/")
 		},
+		// toJSON safely serializes server data for use as a JavaScript value. JSON
+		// encoding is essential here; interpolating raw Markdown could break the
+		// script or turn note content into executable JavaScript.
 		"toJSON": func(v any) (template.JS, error) {
 			b, err := json.Marshal(v)
 			return template.JS(b), err
@@ -166,6 +235,7 @@ func (a *App) loadTemplates() error {
 	return nil
 }
 
+// loadInitContent reads the Markdown appended to every newly created note.
 func (a *App) loadInitContent() error {
 	b, err := os.ReadFile(filepath.Join("templates", "init_note.md"))
 	if err != nil {
@@ -175,14 +245,23 @@ func (a *App) loadInitContent() error {
 	return nil
 }
 
+// Routes builds the HTTP handler tree. Go 1.22+ ServeMux patterns can include an
+// HTTP method and named path wildcards such as {slug}.
 func (a *App) Routes() http.Handler {
 	mux := http.NewServeMux()
+	// FileServer expects paths relative to its directory. StripPrefix converts a
+	// request such as /static/style.css into style.css before the file lookup.
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	// Reading a note is public; creating one is the only route protected by Basic
+	// Auth. Handler methods are passed as function values.
 	mux.HandleFunc("GET /", a.handleIndex)
 	mux.HandleFunc("POST /notes", a.requireAuth(a.handleCreateNote))
 	mux.HandleFunc("GET /notes/{slug}", a.handleViewNote)
 	mux.HandleFunc("POST /notes/{slug}", a.handleUpdateNote)
 	mux.HandleFunc("GET /notes/{slug}/meta", a.handleNoteMeta)
+
+	// Wrap the mux with a small application-wide path check. The returned
+	// http.HandlerFunc itself implements http.Handler through its ServeHTTP method.
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.EscapedPath(), "..") {
 			http.Error(w, "Invalid path", http.StatusBadRequest)
@@ -192,23 +271,33 @@ func (a *App) Routes() http.Handler {
 	})
 }
 
+// requireAuth is middleware: it accepts a handler and returns a new handler that
+// performs authentication before optionally calling the original one.
 func (a *App) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// The username is intentionally ignored; this app treats the configured
+		// admin key as the only credential.
 		_, password, ok := r.BasicAuth()
 		if !ok || password != a.adminKey {
 			w.Header().Set("WWW-Authenticate", `Basic realm="Tiny Markdown Notes"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+		// Calling next continues the request pipeline only after authentication.
 		next(w, r)
 	}
 }
 
+// validateSlug is shared by create, view, update, and import paths so all entry
+// points enforce exactly the same note-name rules.
 func validateSlug(slug string) bool {
 	return slugPattern.MatchString(slug)
 }
 
+// handleIndex renders the note-creation form.
 func (a *App) handleIndex(w http.ResponseWriter, r *http.Request) {
+	// The GET / pattern is a subtree match in ServeMux, so explicitly reject paths
+	// that did not match a more specific route.
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
@@ -216,7 +305,10 @@ func (a *App) handleIndex(w http.ResponseWriter, r *http.Request) {
 	a.render(w, http.StatusOK, "index.html", nil)
 }
 
+// handleCreateNote validates a submitted HTML form and inserts a new note.
 func (a *App) handleCreateNote(w http.ResponseWriter, r *http.Request) {
+	// ParseForm populates r.Form from application/x-www-form-urlencoded or
+	// multipart form data. FormValue below reads from that parsed collection.
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Invalid form", http.StatusBadRequest)
 		return
@@ -227,9 +319,13 @@ func (a *App) handleCreateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// SQL placeholders (?) keep user input separate from the SQL program. Never
+	// build SQL by concatenating form values.
 	markdown := fmt.Sprintf("# %s\n%s", slug, a.initContent)
 	res, err := a.db.ExecContext(
 		r.Context(),
+		// OR IGNORE turns a duplicate primary key into zero affected rows, which
+		// lets the handler report a friendly "already exists" response.
 		`INSERT OR IGNORE INTO notes (slug, markdown, version) VALUES (?, ?, 1)`,
 		slug,
 		markdown,
@@ -247,10 +343,14 @@ func (a *App) handleCreateNote(w http.ResponseWriter, r *http.Request) {
 		alertBack(w, http.StatusConflict, "Note already exists")
 		return
 	}
+	// Post/Redirect/Get prevents a browser refresh from submitting the creation
+	// form again. 303 tells the browser to follow the redirect with GET.
 	http.Redirect(w, r, "/notes/"+slug, http.StatusSeeOther)
 }
 
+// handleViewNote loads one note and renders the main note page.
 func (a *App) handleViewNote(w http.ResponseWriter, r *http.Request) {
+	// PathValue returns the portion captured by {slug} in the route pattern.
 	slug := r.PathValue("slug")
 	if !validateSlug(slug) {
 		http.Error(w, "Invalid note slug", http.StatusBadRequest)
@@ -265,12 +365,16 @@ func (a *App) handleViewNote(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Note not found", http.StatusNotFound)
 		return
 	}
+	// A map is convenient for small, template-specific view data. Dot expressions
+	// in note.html access these values as .Slug and .Note.
 	a.render(w, http.StatusOK, "note.html", map[string]any{
 		"Slug": slug,
 		"Note": note,
 	})
 }
 
+// handleNoteMeta returns lightweight JSON used by the browser's version poll.
+// It avoids downloading and rendering the full note merely to detect a change.
 func (a *App) handleNoteMeta(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	if !validateSlug(slug) {
@@ -286,6 +390,8 @@ func (a *App) handleNoteMeta(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Note not found", http.StatusNotFound)
 		return
 	}
+	// Set response headers before writing the body. Encode streams JSON directly
+	// to the ResponseWriter and appends a newline.
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"version":    note.Version,
@@ -293,6 +399,8 @@ func (a *App) handleNoteMeta(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleUpdateNote saves an edit only if the browser edited the current version.
+// This technique is called optimistic concurrency control.
 func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	if !validateSlug(slug) {
@@ -305,15 +413,22 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	markdown := r.FormValue("markdown")
-	if len(markdown) > maxMarkdownSize {
+	// len(string) is measured in bytes, which is why the limit's unit is explicit
+	// in the constant name.
+	if len(markdown) > maxMarkdownBytes {
 		http.Error(w, "Note content too large", http.StatusRequestEntityTooLarge)
 		return
 	}
 	clientVersion, err := strconv.Atoi(r.FormValue("version"))
 	if err != nil {
+		// Version zero cannot match a valid row (the schema requires version > 0),
+		// so malformed or missing input safely follows the conflict path.
 		clientVersion = 0
 	}
 
+	// A transaction groups the conditional update and its commit into one unit.
+	// The deferred rollback is a safety net: after Commit it becomes a harmless
+	// no-op, while every early return automatically abandons the transaction.
 	tx, err := a.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		http.Error(w, "Update note failed", http.StatusInternalServerError)
@@ -321,6 +436,9 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	// The version comparison happens inside the UPDATE, atomically in SQLite.
+	// Two clients can submit version 1 simultaneously, but only the first update
+	// changes the row to version 2; the second then matches zero rows.
 	res, err := tx.ExecContext(
 		r.Context(),
 		`UPDATE notes
@@ -340,6 +458,7 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if rows == 1 {
+		// Exactly one affected row means both slug and version matched.
 		if err := tx.Commit(); err != nil {
 			http.Error(w, "Update note failed", http.StatusInternalServerError)
 			return
@@ -348,11 +467,18 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The browser normally detects staleness through polling. This 409 remains the
+	// authoritative guard for the small race window between polls.
 	http.Error(w, "Someone else saved this note first. Your changes were not saved.", http.StatusConflict)
 }
 
+// getNote isolates the repeated SELECT-and-Scan logic. Its three return values
+// distinguish "found", "not found", and "database failure" without using an
+// error for the expected not-found case.
 func (a *App) getNote(ctx context.Context, slug string) (Note, bool, error) {
 	var note Note
+	// Scan requires destination pointers so it can assign the selected columns.
+	// Their order must match the SELECT list below.
 	err := a.db.QueryRowContext(
 		ctx,
 		`SELECT slug, markdown, version, created_at, updated_at FROM notes WHERE slug = ?`,
@@ -367,6 +493,7 @@ func (a *App) getNote(ctx context.Context, slug string) (Note, bool, error) {
 	return note, true, nil
 }
 
+// render writes one parsed HTML template to the HTTP response.
 func (a *App) render(w http.ResponseWriter, status int, name string, data any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
@@ -375,6 +502,8 @@ func (a *App) render(w http.ResponseWriter, status int, name string, data any) {
 	}
 }
 
+// alertBack produces a tiny HTML response for form errors on the creation page.
+// %q quotes and escapes the message before embedding it as a JavaScript string.
 func alertBack(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
@@ -386,8 +515,11 @@ func alertBack(w http.ResponseWriter, status int, message string) {
 	`, message)
 }
 
+// importJSONNotes performs a one-way compatibility import from JSON files. It is
+// run at startup and uses INSERT OR IGNORE so existing database notes win.
 func (a *App) importJSONNotes(ctx context.Context, dir string) error {
 	entries, err := os.ReadDir(dir)
+	// A missing optional import directory is normal, not a startup failure.
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
@@ -395,9 +527,12 @@ func (a *App) importJSONNotes(ctx context.Context, dir string) error {
 		return fmt.Errorf("read import directory: %w", err)
 	}
 	for _, entry := range entries {
+		// Ignore subdirectories and unrelated files rather than treating them as
+		// malformed notes.
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
 		}
+		// The filename (minus .json) becomes the URL slug.
 		slug := strings.TrimSuffix(entry.Name(), ".json")
 		if !validateSlug(slug) {
 			return fmt.Errorf("invalid note filename %q", entry.Name())
@@ -408,15 +543,17 @@ func (a *App) importJSONNotes(ctx context.Context, dir string) error {
 			return fmt.Errorf("read note %s: %w", entry.Name(), err)
 		}
 		var imported noteJSON
+		// Unmarshal validates JSON syntax and fills fields according to struct tags.
 		if err := json.Unmarshal(b, &imported); err != nil {
 			return fmt.Errorf("parse note %s: %w", entry.Name(), err)
 		}
 		if imported.Version <= 0 {
 			return fmt.Errorf("note %s has invalid version %d", entry.Name(), imported.Version)
 		}
-		if len(imported.Markdown) > maxMarkdownSize {
+		if len(imported.Markdown) > maxMarkdownBytes {
 			return fmt.Errorf("note %s exceeds max markdown size", entry.Name())
 		}
+		// Existing rows are deliberately not overwritten during repeated startups.
 		_, err = a.db.ExecContext(
 			ctx,
 			`INSERT OR IGNORE INTO notes (slug, markdown, version) VALUES (?, ?, ?)`,
