@@ -4,7 +4,7 @@ services:
     ports:
       - "${NOTES_BIND_ADDRESS:-127.0.0.1}:${NOTES_PORT:-5000}:5000"
     environment:
-      - NOTES_ADMIN_KEY=${NOTES_ADMIN_KEY:-change-me-in-production}
+      - NOTES_ADMIN_KEY=${NOTES_ADMIN_KEY:?set NOTES_ADMIN_KEY in .env}
       - DATA_DIR=/app/data
       - NOTES_IMPORT_DIR=/app/notes
     volumes:

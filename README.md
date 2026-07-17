@@ -8,7 +8,7 @@ Set up your environment variables:
 
 ```bash
 cp .env.example .env
-# Edit .env with your values
+# Edit .env and set a real NOTES_ADMIN_KEY before starting Compose
 ```
 
 For local deployment, run:
