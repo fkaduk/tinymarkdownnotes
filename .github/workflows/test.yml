@@ -6,35 +6,32 @@ on:
   pull_request:
     branches: [ main, master ]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.12"]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
-
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
-
-      - name: Install dependencies
-        run: uv sync --frozen
+          go-version-file: go.mod
+          cache: true
 
       - name: Run tests
-        run: uv run pytest
+        run: go test ./...
 
-      - name: Check test results
-        if: always()
+      - name: Run race tests
+        run: go test -race ./...
+
+      - name: Validate Compose config
         run: |
-          echo "Tests completed"
-          if [ $? -eq 0 ]; then
-            echo "All tests passed!"
+          if docker compose version >/dev/null 2>&1; then
+            docker compose config
+          else
+            docker-compose config
           fi
