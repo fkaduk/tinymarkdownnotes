@@ -11,22 +11,33 @@ cp .env.example .env
 # Edit .env with your values
 ```
 
-For **base deployment**, run:
+For local deployment, run:
 
 ```bash
-make init
-docker-compose up -d
+make up
 ```
 
-and access the app at `http://localhost:5000`
+The app is available at `http://localhost:5000`.
 
-For **production deployment** with HTTPS and rate limiting, run:
+For production HTTPS and rate limiting, set these values in `.env`:
+
+```dotenv
+COMPOSE_PROFILES=production
+DOMAIN=notes.example.com
+```
+
+Then run `make up`. The same Compose file starts Caddy when the `production`
+profile is enabled. Port 5000 remains bound to the host loopback interface;
+public traffic enters through Caddy on ports 80 and 443.
+
+Useful commands:
 
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+make ps
+make logs
+make restart
+make down
 ```
-
-a access the app at your selected domain.
 
 ## Development
 

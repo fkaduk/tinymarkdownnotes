@@ -1,17 +1,31 @@
-.PHONY: up down restart logs init
+.PHONY: up down restart logs ps init
+
+-include .env
+
+DATA_DIR ?= data
+NOTES_IMPORT_DIR ?= notes
+NOTES_UID ?= 1000
+NOTES_GID ?= 1000
+COMPOSE := docker-compose
 
 init:
-	mkdir -p data notes
-	sudo chown -R 1000:1000 data notes
+	mkdir -p "$(DATA_DIR)" "$(NOTES_IMPORT_DIR)"
+	@if [ ! -w "$(DATA_DIR)" ]; then \
+		echo "Fixing ownership of $(DATA_DIR)"; \
+		sudo chown -R "$(NOTES_UID):$(NOTES_GID)" "$(DATA_DIR)"; \
+	fi
 
-up:
-	docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+up: init
+	$(COMPOSE) up -d --build
 
 down:
-	docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
+	$(COMPOSE) --profile production down
 
 restart:
-	docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart
+	$(COMPOSE) restart
 
 logs:
-	docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
+	$(COMPOSE) logs -f
+
+ps:
+	$(COMPOSE) ps
