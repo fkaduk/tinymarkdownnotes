@@ -40,15 +40,15 @@ type Note struct {
 	Slug      string
 	Markdown  string
 	Version   int
-	CreatedAt string // use actual timestamps in the db ?
+	CreatedAt string // TODO: use actual timestamps in the db ?
 	UpdatedAt string
 }
 
 func main() {
-	addr := getenv("ADDR", ":5000")
-	dataDir := getenv("DATA_DIR", "data")
-	dbPath := getenv("NOTES_DB_PATH", filepath.Join(dataDir, "notes.db"))
-	adminKey := getenv("NOTES_ADMIN_KEY", defaultAdminKey)
+	addr := getenv("ADDR", ":5000", true)
+	dataDir := getenv("DATA_DIR", "data", true)
+	dbPath := getenv("NOTES_DB_PATH", filepath.Join(dataDir, "notes.db"), true)
+	adminKey := getenv("NOTES_ADMIN_KEY", defaultAdminKey, false)
 	if adminKey == defaultAdminKey {
 		slog.Warn("NOTES_ADMIN_KEY is using the insecure default")
 	}
@@ -110,10 +110,13 @@ func NewApp(dbPath, adminKey string) (*App, error) {
 // getenv returns the value of the environment variable named by key after
 // removing leading and trailing whitespace. If the variable is unset or the
 // trimmed value is empty, getenv returns fallback.
-func getenv(key, fallback string) string {
+func getenv(key, fallback string, logValue bool) string {
 	value := strings.TrimSpace(os.Getenv(key))
 	if value == "" {
-		return fallback
+		value = fallback
+	}
+	if logValue {
+		slog.Info("Configuration set - ", "key", key, "value", value)
 	}
 	return value
 }
