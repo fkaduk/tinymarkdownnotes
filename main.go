@@ -74,20 +74,8 @@ func main() {
 	}
 }
 
-// getenv returns fallback when a variable is absent, empty, or only whitespace.
-// Trimming here also avoids surprising values such as an address with a trailing
-// newline copied from a secret file.
-func getenv(key, fallback string) string {
-	value := strings.TrimSpace(os.Getenv(key))
-	if value == "" {
-		return fallback
-	}
-	return value
-}
-
-// NewApp constructs a fully initialized application. Constructors in Go are
-// ordinary functions by convention; the language has no special constructor
-// syntax. Returning (*App, error) makes initialization failures explicit.
+// NewApp constructs an application backed by dbPath and using adminKey for
+// authentication.
 func NewApp(dbPath, adminKey string) (*App, error) {
 	if dbPath == "" {
 		return nil, errors.New("database path is required")
@@ -96,15 +84,11 @@ func NewApp(dbPath, adminKey string) (*App, error) {
 		return nil, fmt.Errorf("create database directory: %w", err)
 	}
 
-	// sql.Open creates a database handle (which is also a connection pool). The
-	// query-string options configure each SQLite connection created by the driver.
 	db, err := sql.Open("sqlite3", dbPath+"?_busy_timeout=5000&_foreign_keys=1")
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
-	// SQLite permits many readers but only one writer. A one-connection pool keeps
-	// this tiny application simple and avoids competing writers in one process.
-	db.SetMaxOpenConns(1)
+	db.SetMaxOpenConns(1) // avoid sqlite write issues
 
 	app := &App{db: db, adminKey: adminKey}
 	// Startup work uses a background context because it is not associated with an
@@ -121,6 +105,17 @@ func NewApp(dbPath, adminKey string) (*App, error) {
 		return nil, err
 	}
 	return app, nil
+}
+
+// getenv returns the value of the environment variable named by key after
+// removing leading and trailing whitespace. If the variable is unset or the
+// trimmed value is empty, getenv returns fallback.
+func getenv(key, fallback string) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 // Close releases the application's database resources. Exposing this method
