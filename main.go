@@ -121,8 +121,7 @@ func getenv(key, fallback string, logValue bool) string {
 	return value
 }
 
-// Close releases the application's database resources. Exposing this method
-// makes ownership clear to main and lets tests register cleanup with t.Cleanup.
+// Close releases resources held by the application.
 func (a *App) Close() error {
 	return a.db.Close()
 }
