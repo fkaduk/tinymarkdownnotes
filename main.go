@@ -88,7 +88,7 @@ func NewApp(dbPath, adminKey string) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
-	db.SetMaxOpenConns(1) // avoid sqlite write issues
+	db.SetMaxOpenConns(1) // concurrent writes are not a good idea for sqlite
 
 	app := &App{db: db, adminKey: adminKey}
 	// Startup work uses a background context because it is not associated with an
@@ -110,12 +110,12 @@ func NewApp(dbPath, adminKey string) (*App, error) {
 // getenv returns the value of the environment variable named by key after
 // removing leading and trailing whitespace. If the variable is unset or the
 // trimmed value is empty, getenv returns fallback.
-func getenv(key, fallback string, logValue bool) string {
+func getenv(key, fallback string, log bool) string {
 	value := strings.TrimSpace(os.Getenv(key))
 	if value == "" {
 		value = fallback
 	}
-	if logValue {
+	if log {
 		slog.Info("Configuration set - ", "key", key, "value", value)
 	}
 	return value
