@@ -126,20 +126,14 @@ func (a *App) Close() error {
 	return a.db.Close()
 }
 
-// configureDatabase applies SQLite settings and creates the schema. Every SQL
-// statement is safe to run again, so restarting the application is harmless.
+// configureDatabase applies SQLite settings and creates the schema.
 func (a *App) configureDatabase(ctx context.Context) error {
-	// WAL (write-ahead logging) allows readers to continue while a write commits.
 	if _, err := a.db.ExecContext(ctx, `PRAGMA journal_mode = WAL`); err != nil {
 		return fmt.Errorf("enable wal: %w", err)
 	}
-	// A busy timeout asks SQLite to wait briefly for a lock instead of immediately
-	// returning "database is locked" during a short overlap.
 	if _, err := a.db.ExecContext(ctx, `PRAGMA busy_timeout = 5000`); err != nil {
 		return fmt.Errorf("set busy timeout: %w", err)
 	}
-	// IF NOT EXISTS makes schema creation idempotent. Database constraints provide
-	// a final line of defense even if a future caller bypasses HTTP validation.
 	_, err := a.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS notes (
 			slug TEXT PRIMARY KEY,
@@ -155,9 +149,7 @@ func (a *App) configureDatabase(ctx context.Context) error {
 	return nil
 }
 
-// loadTemplates parses every HTML template once during startup. Parsing once is
-// faster than reparsing per request and turns template syntax errors into clear
-// startup failures.
+// loadTemplates parses every HTML template once during startup.
 func (a *App) loadTemplates() error {
 	// FuncMap exposes small Go helpers to templates. It must be attached before
 	// ParseGlob because templates resolve function names while they are parsed.
