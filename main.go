@@ -149,7 +149,7 @@ func (a *App) configureDatabase(ctx context.Context) error {
 	return nil
 }
 
-// loadTemplates parses every HTML template once during startup.
+// loadTemplates parses HTML templates once during startup.
 func (a *App) loadTemplates() error {
 	// FuncMap exposes small Go helpers to templates. It must be attached before
 	// ParseGlob because templates resolve function names while they are parsed.
@@ -174,23 +174,20 @@ func (a *App) loadTemplates() error {
 	return nil
 }
 
-// Routes builds the HTTP handler tree. Go 1.22+ ServeMux patterns can include an
-// HTTP method and named path wildcards such as {slug}.
+// Routes builds the HTTP handler tree.
 func (a *App) Routes() http.Handler {
 	mux := http.NewServeMux()
-	// FileServer expects paths relative to its directory. StripPrefix converts a
-	// request such as /static/style.css into style.css before the file lookup.
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	// Reading a note is public; creating one is the only route protected by Basic
-	// Auth. Handler methods are passed as function values.
+	handler := http.StripPrefix("/static/", http.FileServer(http.Dir("static")))
+	mux.Handle("GET /static/", handler)
+
 	mux.HandleFunc("GET /", a.handleIndex)
 	mux.HandleFunc("POST /notes", a.requireAuth(a.handleCreateNote))
 	mux.HandleFunc("GET /notes/{slug}", a.handleViewNote)
 	mux.HandleFunc("POST /notes/{slug}", a.handleUpdateNote)
 	mux.HandleFunc("GET /notes/{slug}/meta", a.handleNoteMeta)
 
-	// Wrap the mux with a small application-wide path check. The returned
-	// http.HandlerFunc itself implements http.Handler through its ServeHTTP method.
+	// TODO: I think this is necessary to make sure missing notes
+	// arent accessed? Isnt there an easier way ?
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.EscapedPath(), "..") {
 			http.Error(w, "Invalid path", http.StatusBadRequest)
@@ -200,25 +197,23 @@ func (a *App) Routes() http.Handler {
 	})
 }
 
-// requireAuth is middleware: it accepts a handler and returns a new handler that
-// performs authentication before optionally calling the original one.
+// requireAuth accepts a handler and returns a new handler that
+// performs authentication before calling the original one.
+// TODO: is this best practice ? Is this how auth is best done ?
 func (a *App) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// The username is intentionally ignored; this app treats the configured
-		// admin key as the only credential.
+		// TODO: using BasicAuth() is that good enought ?
 		_, password, ok := r.BasicAuth()
 		if !ok || password != a.adminKey {
 			w.Header().Set("WWW-Authenticate", `Basic realm="Tiny Markdown Notes"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		// Calling next continues the request pipeline only after authentication.
 		next(w, r)
 	}
 }
 
-// validateSlug is shared by create, view, and update paths so all entry
-// points enforce exactly the same note-name rules.
+// validateSlug enforces note-name rules.
 func validateSlug(slug string) bool {
 	return slugPattern.MatchString(slug)
 }
@@ -227,6 +222,7 @@ func validateSlug(slug string) bool {
 func (a *App) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// The GET / pattern is a subtree match in ServeMux, so explicitly reject paths
 	// that did not match a more specific route.
+	// TODO: doesnt make sense to me, why is this needed?
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
@@ -236,8 +232,6 @@ func (a *App) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 // handleCreateNote validates a submitted HTML form and inserts a new note.
 func (a *App) handleCreateNote(w http.ResponseWriter, r *http.Request) {
-	// ParseForm populates r.Form from application/x-www-form-urlencoded or
-	// multipart form data. FormValue below reads from that parsed collection.
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Invalid form", http.StatusBadRequest)
 		return
@@ -248,13 +242,9 @@ func (a *App) handleCreateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// SQL placeholders (?) keep user input separate from the SQL program. Never
-	// build SQL by concatenating form values.
 	markdown := fmt.Sprintf("# %s\n%s", slug, initNoteContent)
 	res, err := a.db.ExecContext(
 		r.Context(),
-		// OR IGNORE turns a duplicate primary key into zero affected rows, which
-		// lets the handler report a friendly "already exists" response.
 		`INSERT OR IGNORE INTO notes (slug, markdown, version) VALUES (?, ?, 1)`,
 		slug,
 		markdown,
@@ -273,13 +263,11 @@ func (a *App) handleCreateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Post/Redirect/Get prevents a browser refresh from submitting the creation
-	// form again. 303 tells the browser to follow the redirect with GET.
 	http.Redirect(w, r, "/notes/"+slug, http.StatusSeeOther)
 }
 
 // handleViewNote loads one note and renders the main note page.
 func (a *App) handleViewNote(w http.ResponseWriter, r *http.Request) {
-	// PathValue returns the portion captured by {slug} in the route pattern.
 	slug := r.PathValue("slug")
 	if !validateSlug(slug) {
 		http.Error(w, "Invalid note slug", http.StatusBadRequest)
@@ -294,8 +282,7 @@ func (a *App) handleViewNote(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Note not found", http.StatusNotFound)
 		return
 	}
-	// A map is convenient for small, template-specific view data. Dot expressions
-	// in note.html access these values as .Slug and .Note.
+
 	a.render(w, http.StatusOK, "note.html", map[string]any{
 		"Slug": slug,
 		"Note": note,
@@ -424,6 +411,7 @@ func (a *App) getNote(ctx context.Context, slug string) (Note, bool, error) {
 
 // render writes one parsed HTML template to the HTTP response.
 func (a *App) render(w http.ResponseWriter, status int, name string, data any) {
+	// TODO: do we use data type any here because we just propagate the ExecueTemplate arg?
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	if err := a.templates.ExecuteTemplate(w, name, data); err != nil {
@@ -433,7 +421,9 @@ func (a *App) render(w http.ResponseWriter, status int, name string, data any) {
 
 // alertBack produces a tiny HTML response for form errors on the creation page.
 // %q quotes and escapes the message before embedding it as a JavaScript string.
+// TODO: dont like the name of this function, not descriptive enought
 func alertBack(w http.ResponseWriter, status int, message string) {
+	// TODO: is this really the best approach ? wouldnt a browser level alert suffice ?
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	fmt.Fprintf(w, `
