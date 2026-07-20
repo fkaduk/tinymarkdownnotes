@@ -26,5 +26,9 @@ test-results/
 playwright-report/
 blob-report/
 
+# Hugo output is not used by this Go application
+public/
+.hugo_build.lock
+
 # Environment variables
 .env
