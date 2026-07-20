@@ -160,15 +160,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /notes/{slug}", a.handleUpdateNote)
 	mux.HandleFunc("GET /notes/{slug}/meta", a.handleNoteMeta)
 
-	// TODO: I think this is necessary to make sure missing notes
-	// arent accessed? Isnt there an easier way ?
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.EscapedPath(), "..") {
-			http.Error(w, "Invalid path", http.StatusBadRequest)
-			return
-		}
-		mux.ServeHTTP(w, r)
-	})
+	return mux
 }
 
 // requireAuth accepts a handler and returns a new handler that
