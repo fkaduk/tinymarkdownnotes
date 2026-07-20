@@ -7,7 +7,7 @@ function uniqueSlug(prefix: string): string {
 async function createNote(page: Page, slug: string): Promise<void> {
   await page.goto("/");
   await page.getByPlaceholder("note-name").fill(slug);
-  await page.getByRole("button", { name: "Create Note" }).click();
+  await page.getByRole("button", { name: "Open Note" }).click();
 
   await expect(page).toHaveURL(`/notes/${slug}`);
   await expect(page.locator("#version-field")).toHaveValue("1");
@@ -22,28 +22,16 @@ test("creates a note and renders its initial preview", async ({ page }) => {
   await expect(page.locator("#preview")).toContainText(slug);
 });
 
-test("shows an inline warning for a duplicate slug", async ({ page }) => {
+test("opens the existing note for a duplicate slug", async ({ page }) => {
   const slug = uniqueSlug("duplicate");
   await createNote(page, slug);
 
   await page.goto("/");
   await page.getByPlaceholder("note-name").fill(slug);
-  const duplicateResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      response.url().endsWith("/notes"),
-  );
-  await page.getByRole("button", { name: "Create Note" }).click();
+  await page.getByRole("button", { name: "Open Note" }).click();
 
-  expect((await duplicateResponse).status()).toBe(409);
-  await expect(page.locator(".warning")).toContainText(
-    "A note with this name already exists",
-  );
-  await expect(page.getByPlaceholder("note-name")).toHaveValue(slug);
-  await expect(page.getByRole("link", { name: "Open the existing note" })).toHaveAttribute(
-    "href",
-    `/notes/${slug}`,
-  );
+  await expect(page).toHaveURL(`/notes/${slug}`);
+  await expect(page.locator("#version-field")).toHaveValue("1");
 });
 
 test("edits and reloads a note with its next version", async ({ page }) => {

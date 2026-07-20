@@ -199,8 +199,8 @@ button:hover, .save-button:hover {
     cursor: not-allowed;
 }
 
-/* Persistent warning used for duplicate names and rejected stale saves. */
-.warning {
+/* Persistent warning shown after a rejected stale save. */
+.stale-warning {
     margin-bottom: 12px;
     padding: 12px;
     border: 1px solid #b8893a;

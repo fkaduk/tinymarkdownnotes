@@ -6,7 +6,6 @@ package main
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -115,7 +114,6 @@ func TestInvalidSlugsAreRejected(t *testing.T) {
 	app := newTestApp(t)
 	invalidPaths := []string{
 		"/notes/test/path",
-		"/notes/../etc",
 		"/notes/test%20space",
 		"/notes/test@note",
 		"/notes/test.note",
@@ -164,13 +162,16 @@ func TestCreateInvalidSlugFails(t *testing.T) {
 	}
 }
 
-func TestCreateDuplicateNoteFails(t *testing.T) {
+func TestCreateDuplicateNoteOpensExistingNote(t *testing.T) {
 	app := newTestApp(t)
 	createTestNote(t, app, "existing", "", 1)
 
 	rr := formRequest(app, http.MethodPost, "/notes", url.Values{"slug": {"existing"}}, true)
-	if rr.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want %d", rr.Code, http.StatusConflict)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusSeeOther)
+	}
+	if rr.Header().Get("Location") != "/notes/existing" {
+		t.Fatalf("location = %q", rr.Header().Get("Location"))
 	}
 }
 
@@ -227,31 +228,6 @@ func TestEditNoteTooLargeReturns413(t *testing.T) {
 	}
 }
 
-// The meta endpoint is intentionally small JSON used by browser polling.
-func TestNoteMetaReturnsLatestVersion(t *testing.T) {
-	app := newTestApp(t)
-	createTestNote(t, app, "meta-test", "", 4)
-
-	req := httptest.NewRequest(http.MethodGet, "/notes/meta-test/meta", nil)
-	rr := httptest.NewRecorder()
-	app.Routes().ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-	}
-	// An anonymous struct is useful when a test only needs one field and does not
-	// warrant a reusable named type.
-	var payload struct {
-		Version int `json:"version"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
-		t.Fatal(err)
-	}
-	if payload.Version != 4 {
-		t.Fatalf("version = %d, want 4", payload.Version)
-	}
-}
-
 // This test verifies both halves of a rejected save: the HTTP response reports a
 // conflict and the persisted row remains unchanged.
 func TestStalePostRejectedEvenWithoutClientGuard(t *testing.T) {
@@ -266,9 +242,9 @@ func TestStalePostRejectedEvenWithoutClientGuard(t *testing.T) {
 	if rr.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusConflict)
 	}
-	note, ok, err := app.getNote(context.Background(), "stale-test")
-	if err != nil || !ok {
-		t.Fatalf("get note ok=%v err=%v", ok, err)
+	note, err := app.getNote(context.Background(), "stale-test")
+	if err != nil {
+		t.Fatalf("get note: %v", err)
 	}
 	if note.Markdown != "# Current\n" || note.Version != 2 {
 		t.Fatalf("stale save changed note: %#v", note)

@@ -21,13 +21,6 @@
 <body>
     <div class="container">
         <h1>Tiny Markdown Notes</h1>
-        {{ if .Warning }}
-            <div class="warning" role="alert">
-                {{ .Warning }}
-                <a href="/notes/{{ .Slug }}">Open the existing note</a>
-                or choose another name.
-            </div>
-        {{ end }}
         <!--
             A normal HTML form sends an application/x-www-form-urlencoded POST
             request. The action matches POST /notes in the Go router.
@@ -39,10 +32,9 @@
             -->
             <input type="text" name="slug"
                    placeholder="note-name"
-                   value="{{ .Slug }}"
                    pattern="[a-zA-Z0-9_-]{1,64}"
                    required>
-            <button type="submit">Create Note</button>
+            <button type="submit">Open Note</button>
         </form>
     </div>
 </body>

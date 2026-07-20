@@ -43,11 +43,6 @@ type Note struct {
 	UpdatedAt string
 }
 
-type IndexPageData struct {
-	Slug    string
-	Warning string
-}
-
 func main() {
 	addr := getenv("ADDR", ":5000", true)
 	dataDir := getenv("DATA_DIR", "data", true)
@@ -174,7 +169,7 @@ func (a *App) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 
 // handleIndex renders the note-creation form.
 func (a *App) handleIndex(w http.ResponseWriter, r *http.Request) {
-	a.renderHTMLTemplate(w, http.StatusOK, "index.html", IndexPageData{})
+	a.renderHTMLTemplate(w, http.StatusOK, "index.html", nil)
 }
 
 // handleCreateNote validates a submitted HTML form and inserts a new note.
@@ -190,7 +185,7 @@ func (a *App) handleCreateNote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	markdown := fmt.Sprintf("# %s\n%s", slug, initNoteContent)
-	res, err := a.db.ExecContext(
+	_, err := a.db.ExecContext(
 		r.Context(),
 		`INSERT OR IGNORE INTO notes (slug, markdown, version) VALUES (?, ?, 1)`,
 		slug,
@@ -198,18 +193,6 @@ func (a *App) handleCreateNote(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		http.Error(w, "Create note failed", http.StatusInternalServerError)
-		return
-	}
-	rows, err := res.RowsAffected()
-	if err != nil {
-		http.Error(w, "Create note failed", http.StatusInternalServerError)
-		return
-	}
-	if rows == 0 {
-		a.renderHTMLTemplate(w, http.StatusConflict, "index.html", IndexPageData{
-			Slug:    slug,
-			Warning: "A note with this name already exists.",
-		})
 		return
 	}
 	// Post/Redirect/Get prevents a browser refresh from submitting the creation
