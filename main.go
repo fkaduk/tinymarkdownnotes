@@ -133,16 +133,14 @@ func (a *App) configureDatabase(ctx context.Context) error {
 
 // loadTemplates parses HTML templates once during startup.
 func (a *App) loadTemplates() error {
-	// FuncMap exposes small Go helpers to templates. It must be attached before
-	// ParseGlob because templates resolve function names while they are parsed.
+	// FuncMap exposes small Go helpers to templates
 	funcs := template.FuncMap{
 		// staticURL centralizes the public URL prefix for CSS and other assets.
 		"staticURL": func(name string) string {
 			return "/static/" + strings.TrimLeft(name, "/")
 		},
-		// toJSON safely serializes server data for use as a JavaScript value. JSON
-		// encoding is essential here; interpolating raw Markdown could break the
-		// script or turn note content into executable JavaScript.
+		// toJSON safely serializes server data for use as a JavaScript value.
+		// TODO: why is this needed?
 		"toJSON": func(v any) (template.JS, error) {
 			b, err := json.Marshal(v)
 			return template.JS(b), err
@@ -193,25 +191,6 @@ func (a *App) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	}
-}
-
-// getenv returns the value of the environment variable named by key after
-// removing leading and trailing whitespace. If the variable is unset or the
-// trimmed value is empty, getenv returns fallback.
-func getenv(key, fallback string, log bool) string {
-	value := strings.TrimSpace(os.Getenv(key))
-	if value == "" {
-		value = fallback
-	}
-	if log {
-		slog.Info("Configuration set - ", "key", key, "value", value)
-	}
-	return value
-}
-
-// validateSlug enforces note-name rules.
-func validateSlug(slug string) bool {
-	return slugPattern.MatchString(slug)
 }
 
 // handleIndex renders the note-creation form.
@@ -410,6 +389,25 @@ func (a *App) render(w http.ResponseWriter, status int, name string, data any) {
 	if err := a.templates.ExecuteTemplate(w, name, data); err != nil {
 		slog.Error("render template", "template", name, "error", err)
 	}
+}
+
+// getenv returns the value of the environment variable named by key after
+// removing leading and trailing whitespace. If the variable is unset or the
+// trimmed value is empty, getenv returns fallback.
+func getenv(key, fallback string, log bool) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		value = fallback
+	}
+	if log {
+		slog.Info("Configuration set - ", "key", key, "value", value)
+	}
+	return value
+}
+
+// validateSlug enforces note-name rules.
+func validateSlug(slug string) bool {
+	return slugPattern.MatchString(slug)
 }
 
 // alertBack produces a tiny HTML response for form errors on the creation page.
