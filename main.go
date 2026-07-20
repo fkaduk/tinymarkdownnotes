@@ -186,6 +186,7 @@ func (a *App) handleOpenOrCreateNote(w http.ResponseWriter, r *http.Request) {
 	}
 	slug := strings.TrimSpace(r.FormValue("slug"))
 	if !validateSlug(slug) {
+		// TODO: this forwards to another html. cant it be a modal or something else, super simple ?
 		http.Error(w, "Invalid note name", http.StatusBadRequest)
 		return
 	}
