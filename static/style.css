@@ -48,10 +48,6 @@ input[type="text"]:focus {
     border-color: #5eb3d6;
 }
 
-.form-error {
-    color: #ff8a8a;
-}
-
 /* A comma groups selectors so native buttons and save buttons share rules. */
 button, .save-button {
     padding: 10px 24px;
