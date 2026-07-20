@@ -91,12 +91,8 @@ func NewApp(dbPath, adminKey string) (*App, error) {
 	db.SetMaxOpenConns(1) // concurrent writes are not a good idea for sqlite
 
 	app := &App{db: db, adminKey: adminKey}
-	// Startup work uses a background context because it is not associated with an
-	// incoming request. Request handlers use r.Context() instead, so their database
-	// operations are cancelled if the client disconnects.
+	// TODO: what does context Background mean here?
 	if err := app.configureDatabase(context.Background()); err != nil {
-		// A partially initialized App is not returned, so NewApp must release the
-		// resources it has already acquired on every error path.
 		db.Close()
 		return nil, err
 	}
@@ -105,20 +101,6 @@ func NewApp(dbPath, adminKey string) (*App, error) {
 		return nil, err
 	}
 	return app, nil
-}
-
-// getenv returns the value of the environment variable named by key after
-// removing leading and trailing whitespace. If the variable is unset or the
-// trimmed value is empty, getenv returns fallback.
-func getenv(key, fallback string, log bool) string {
-	value := strings.TrimSpace(os.Getenv(key))
-	if value == "" {
-		value = fallback
-	}
-	if log {
-		slog.Info("Configuration set - ", "key", key, "value", value)
-	}
-	return value
 }
 
 // Close releases resources held by the application.
@@ -211,6 +193,20 @@ func (a *App) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	}
+}
+
+// getenv returns the value of the environment variable named by key after
+// removing leading and trailing whitespace. If the variable is unset or the
+// trimmed value is empty, getenv returns fallback.
+func getenv(key, fallback string, log bool) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		value = fallback
+	}
+	if log {
+		slog.Info("Configuration set - ", "key", key, "value", value)
+	}
+	return value
 }
 
 // validateSlug enforces note-name rules.
@@ -389,13 +385,13 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 // error for the expected not-found case.
 func (a *App) getNote(ctx context.Context, slug string) (Note, bool, error) {
 	var note Note
-	// Scan requires destination pointers so it can assign the selected columns.
-	// Their order must match the SELECT list below.
+
 	err := a.db.QueryRowContext(
 		ctx,
 		`SELECT slug, markdown, version, created_at, updated_at FROM notes WHERE slug = ?`,
 		slug,
 	).Scan(&note.Slug, &note.Markdown, &note.Version, &note.CreatedAt, &note.UpdatedAt)
+	// TODO: i dont get what this bool is for. we know from the Note and error value how things went.
 	if errors.Is(err, sql.ErrNoRows) {
 		return Note{}, false, nil
 	}
@@ -406,6 +402,7 @@ func (a *App) getNote(ctx context.Context, slug string) (Note, bool, error) {
 }
 
 // render writes one parsed HTML template to the HTTP response.
+// TODO: func name insufficiently rescriptive
 func (a *App) render(w http.ResponseWriter, status int, name string, data any) {
 	// TODO: do we use data type any here because we just propagate the ExecueTemplate arg?
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
