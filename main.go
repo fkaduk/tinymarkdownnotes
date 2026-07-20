@@ -154,7 +154,7 @@ func (a *App) Routes() http.Handler {
 	handler := http.StripPrefix("/static/", http.FileServer(http.Dir("static")))
 	mux.Handle("GET /static/", handler)
 
-	mux.HandleFunc("GET /", a.handleIndex)
+	mux.HandleFunc("GET /{$}", a.handleIndex)
 	mux.HandleFunc("POST /notes", a.requireAuth(a.handleCreateNote))
 	mux.HandleFunc("GET /notes/{slug}", a.handleViewNote)
 	mux.HandleFunc("POST /notes/{slug}", a.handleUpdateNote)
@@ -165,10 +165,8 @@ func (a *App) Routes() http.Handler {
 
 // requireAuth accepts a handler and returns a new handler that
 // performs authentication before calling the original one.
-// TODO: is this best practice ? Is this how auth is best done ?
 func (a *App) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: using BasicAuth() is that good enought ?
 		_, password, ok := r.BasicAuth()
 		if !ok || password != a.adminKey {
 			w.Header().Set("WWW-Authenticate", `Basic realm="Tiny Markdown Notes"`)
@@ -181,13 +179,6 @@ func (a *App) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 
 // handleIndex renders the note-creation form.
 func (a *App) handleIndex(w http.ResponseWriter, r *http.Request) {
-	// The GET / pattern is a subtree match in ServeMux, so explicitly reject paths
-	// that did not match a more specific route.
-	// TODO: doesnt make sense to me, why is this needed?
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
-	}
 	a.render(w, http.StatusOK, "index.html", nil)
 }
 
