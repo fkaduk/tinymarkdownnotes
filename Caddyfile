@@ -1,5 +1,14 @@
 {$DOMAIN:localhost} {
     rate_limit {
+        zone read_notes {
+            key {remote_host}
+            match {
+                method GET
+                path /notes/*
+            }
+            events 60
+            window 1m
+        }
         zone create_notes {
             key {remote_host}
             match {

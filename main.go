@@ -145,11 +145,18 @@ func (a *App) Routes() http.Handler {
 	mux.Handle("GET /static/", handler)
 
 	mux.HandleFunc("GET /{$}", a.handleIndex)
+	mux.HandleFunc("GET /robots.txt", handleRobots)
 	mux.HandleFunc("POST /notes", a.requireAuth(a.handleOpenOrCreateNote))
 	mux.HandleFunc("GET /notes/{slug}", a.handleViewNote)
 	mux.HandleFunc("POST /notes/{slug}", a.handleUpdateNote)
 
 	return mux
+}
+
+// handleRobots asks compliant crawlers not to visit note pages.
+func handleRobots(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	fmt.Fprint(w, "User-agent: *\nDisallow: /notes/\n")
 }
 
 // requireAuth accepts a handler and returns a new handler that
@@ -202,6 +209,7 @@ func (a *App) handleOpenOrCreateNote(w http.ResponseWriter, r *http.Request) {
 
 // handleViewNote loads one note and renders the main note page.
 func (a *App) handleViewNote(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 	slug := r.PathValue("slug")
 	if !validateSlug(slug) {
 		http.Error(w, "Invalid note slug", http.StatusBadRequest)
