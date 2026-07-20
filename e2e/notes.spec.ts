@@ -22,6 +22,30 @@ test("creates a note and renders its initial preview", async ({ page }) => {
   await expect(page.locator("#preview")).toContainText(slug);
 });
 
+test("shows an inline warning for a duplicate slug", async ({ page }) => {
+  const slug = uniqueSlug("duplicate");
+  await createNote(page, slug);
+
+  await page.goto("/");
+  await page.getByPlaceholder("note-name").fill(slug);
+  const duplicateResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith("/notes"),
+  );
+  await page.getByRole("button", { name: "Create Note" }).click();
+
+  expect((await duplicateResponse).status()).toBe(409);
+  await expect(page.locator(".warning")).toContainText(
+    "A note with this name already exists",
+  );
+  await expect(page.getByPlaceholder("note-name")).toHaveValue(slug);
+  await expect(page.getByRole("link", { name: "Open the existing note" })).toHaveAttribute(
+    "href",
+    `/notes/${slug}`,
+  );
+});
+
 test("edits and reloads a note with its next version", async ({ page }) => {
   const slug = uniqueSlug("edit");
   const markdown = "# Updated in Playwright\n\n- [x] Saved";
