@@ -288,20 +288,21 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: dont like this, happy path should be left aligned.
-	if rows == 1 {
-		// Exactly one affected row means both slug and version matched.
-		if err := tx.Commit(); err != nil {
-			http.Error(w, "Update note failed", http.StatusInternalServerError)
-			return
-		}
-		http.Redirect(w, r, "/notes/"+slug, http.StatusSeeOther)
+	if rows == 0 {
+		// A zero-row update means the submitted version is stale. Keep the stored
+		// note unchanged and let the browser preserve the rejected draft.
+		http.Error(w, "Someone else saved this note first. Your changes were not saved.", http.StatusConflict)
 		return
 	}
-
-	// A zero-row update means the submitted version is stale. Keep the stored note
-	// unchanged and let the browser preserve the rejected draft for the user.
-	http.Error(w, "Someone else saved this note first. Your changes were not saved.", http.StatusConflict)
+	if rows != 1 {
+		http.Error(w, "Update note failed", http.StatusInternalServerError)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "Update note failed", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/notes/"+slug, http.StatusSeeOther)
 }
 
 // getNote isolates the repeated SELECT-and-Scan logic. Its three return values
