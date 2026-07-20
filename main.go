@@ -135,6 +135,7 @@ func (a *App) loadTemplates() error {
 	// FuncMap exposes small Go helpers to templates
 	funcs := template.FuncMap{
 		// staticURL centralizes the public URL prefix for CSS and other assets.
+		// TODO: is this really necessary? isnt there something build-in for the template pkg ?
 		"staticURL": func(name string) string {
 			return "/static/" + strings.TrimLeft(name, "/")
 		},
