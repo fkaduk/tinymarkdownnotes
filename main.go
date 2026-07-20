@@ -292,6 +292,7 @@ func (a *App) handleViewNote(w http.ResponseWriter, r *http.Request) {
 // handleNoteMeta returns lightweight JSON used by the browser's version poll.
 // It avoids downloading and rendering the full note merely to detect a change.
 func (a *App) handleNoteMeta(w http.ResponseWriter, r *http.Request) {
+	// TODO: dont like this approach, code duplication + another endpoint. this app handles tiny notes, so im fine with fetching the entire note every time. Except if there is a much smarter approach ?
 	slug := r.PathValue("slug")
 	if !validateSlug(slug) {
 		http.Error(w, "Invalid note slug", http.StatusBadRequest)
@@ -316,7 +317,6 @@ func (a *App) handleNoteMeta(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleUpdateNote saves an edit only if the browser edited the current version.
-// This technique is called optimistic concurrency control.
 func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	if !validateSlug(slug) {
@@ -329,22 +329,19 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	markdown := r.FormValue("markdown")
-	// len(string) is measured in bytes, which is why the limit's unit is explicit
-	// in the constant name.
 	if len(markdown) > maxMarkdownBytes {
 		http.Error(w, "Note content too large", http.StatusRequestEntityTooLarge)
 		return
 	}
 	clientVersion, err := strconv.Atoi(r.FormValue("version"))
 	if err != nil {
+		// TODO: dont like it, this catches ANY error, how do we know that
+		// this is clienVersion = 0 case ?
 		// Version zero cannot match a valid row (the schema requires version > 0),
 		// so malformed or missing input safely follows the conflict path.
 		clientVersion = 0
 	}
 
-	// A transaction groups the conditional update and its commit into one unit.
-	// The deferred rollback is a safety net: after Commit it becomes a harmless
-	// no-op, while every early return automatically abandons the transaction.
 	tx, err := a.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		http.Error(w, "Update note failed", http.StatusInternalServerError)
@@ -352,9 +349,6 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// The version comparison happens inside the UPDATE, atomically in SQLite.
-	// Two clients can submit version 1 simultaneously, but only the first update
-	// changes the row to version 2; the second then matches zero rows.
 	res, err := tx.ExecContext(
 		r.Context(),
 		`UPDATE notes
@@ -373,6 +367,8 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Update note failed", http.StatusInternalServerError)
 		return
 	}
+
+	// TODO: dont like this, happy path should be left aligned.
 	if rows == 1 {
 		// Exactly one affected row means both slug and version matched.
 		if err := tx.Commit(); err != nil {
