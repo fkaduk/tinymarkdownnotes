@@ -40,7 +40,7 @@ type Note struct {
 	Slug      string
 	Markdown  string
 	Version   int
-	CreatedAt string // TODO: use actual timestamps in the db ?
+	CreatedAt string
 	UpdatedAt string
 }
 
