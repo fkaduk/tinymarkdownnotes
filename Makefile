@@ -1,4 +1,4 @@
-.PHONY: up down restart logs ps init
+.PHONY: up down restart logs ps init test-e2e
 
 -include .env
 
@@ -28,3 +28,6 @@ logs:
 
 ps:
 	$(COMPOSE) ps
+
+test-e2e:
+	npm run test:e2e

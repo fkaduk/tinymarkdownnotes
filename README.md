@@ -49,3 +49,21 @@ go run .
 ```
 
 The app stores notes in `data/notes.db`.
+
+### End-to-end tests
+
+Install the JavaScript dependencies and the Chromium test browser once:
+
+```bash
+npm install
+npx playwright install chromium
+```
+
+Run the end-to-end suite:
+
+```bash
+npm run test:e2e
+```
+
+Playwright starts the Go application automatically on port 4173 with an
+isolated SQLite database under `test-results/`.

@@ -138,11 +138,11 @@
         // saveMarkdown is shared by the explicit Save button and checkbox
         // auto-save. async/await makes the asynchronous fetch read sequentially.
         async function saveMarkdown(markdown) {
-            // FormData uses the same field names as the ordinary HTML form, so a
-            // single Go handler supports both JavaScript and non-JavaScript posts.
-            const formData = new FormData();
-            formData.append('markdown', markdown);
-            formData.append('version', loadedVersion);
+            // URLSearchParams uses the same URL-encoded format and field names as
+            // the ordinary HTML form, so one Go handler supports both paths.
+            const formData = new URLSearchParams();
+            formData.set('markdown', markdown);
+            formData.set('version', loadedVersion);
 
             try {
                 // fetch sends the request without leaving the current page. Go's
