@@ -131,15 +131,7 @@ func (a *App) configureDatabase() error {
 
 // loadTemplates parses HTML templates once during startup.
 func (a *App) loadTemplates() error {
-	// FuncMap exposes small Go helpers to templates
-	funcs := template.FuncMap{
-		// staticURL centralizes the public URL prefix for CSS and other assets.
-		// TODO: is this really necessary? isnt there something build-in for the template pkg ?
-		"staticURL": func(name string) string {
-			return "/static/" + strings.TrimLeft(name, "/")
-		},
-	}
-	tmpl, err := template.New("").Funcs(funcs).ParseGlob("templates/*.html")
+	tmpl, err := template.ParseGlob("templates/*.html")
 	if err != nil {
 		return fmt.Errorf("parse templates: %w", err)
 	}
@@ -223,13 +215,13 @@ func (a *App) handleViewNote(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid note slug", http.StatusBadRequest)
 		return
 	}
-	note, ok, err := a.getNote(r.Context(), slug)
-	if err != nil {
-		http.Error(w, "Load note failed", http.StatusInternalServerError)
+	note, err := a.getNote(r.Context(), slug)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "Note not found", http.StatusNotFound)
 		return
 	}
-	if !ok {
-		http.Error(w, "Note not found", http.StatusNotFound)
+	if err != nil {
+		http.Error(w, "Load note failed", http.StatusInternalServerError)
 		return
 	}
 
@@ -305,10 +297,8 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/notes/"+slug, http.StatusSeeOther)
 }
 
-// getNote isolates the repeated SELECT-and-Scan logic. Its three return values
-// distinguish "found", "not found", and "database failure" without using an
-// error for the expected not-found case.
-func (a *App) getNote(ctx context.Context, slug string) (Note, bool, error) {
+// getNote loads one note by slug.
+func (a *App) getNote(ctx context.Context, slug string) (Note, error) {
 	var note Note
 
 	err := a.db.QueryRowContext(
@@ -316,14 +306,7 @@ func (a *App) getNote(ctx context.Context, slug string) (Note, bool, error) {
 		`SELECT slug, markdown, version, created_at, updated_at FROM notes WHERE slug = ?`,
 		slug,
 	).Scan(&note.Slug, &note.Markdown, &note.Version, &note.CreatedAt, &note.UpdatedAt)
-	// TODO: i dont get what this bool is for. we know from the Note and error value how things went.
-	if errors.Is(err, sql.ErrNoRows) {
-		return Note{}, false, nil
-	}
-	if err != nil {
-		return Note{}, false, err
-	}
-	return note, true, nil
+	return note, err
 }
 
 // render writes one parsed HTML template to the HTTP response.
