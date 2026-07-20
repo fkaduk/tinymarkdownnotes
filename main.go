@@ -43,6 +43,11 @@ type Note struct {
 	UpdatedAt string
 }
 
+type IndexPageData struct {
+	Slug  string
+	Error string
+}
+
 func main() {
 	addr := getenv("ADDR", ":5000", true)
 	dataDir := getenv("DATA_DIR", "data", true)
@@ -169,7 +174,7 @@ func (a *App) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 
 // handleIndex renders the note-creation form.
 func (a *App) handleIndex(w http.ResponseWriter, r *http.Request) {
-	a.renderHTMLTemplate(w, http.StatusOK, "index.html", nil)
+	a.renderHTMLTemplate(w, http.StatusOK, "index.html", IndexPageData{})
 }
 
 // handleCreateNote validates a submitted HTML form and inserts a new note.
@@ -180,7 +185,10 @@ func (a *App) handleCreateNote(w http.ResponseWriter, r *http.Request) {
 	}
 	slug := strings.TrimSpace(r.FormValue("slug"))
 	if !validateSlug(slug) {
-		alertBack(w, http.StatusBadRequest, "Invalid note name")
+		a.renderHTMLTemplate(w, http.StatusBadRequest, "index.html", IndexPageData{
+			Slug:  slug,
+			Error: "Invalid note name",
+		})
 		return
 	}
 
@@ -201,7 +209,10 @@ func (a *App) handleCreateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if rows == 0 {
-		alertBack(w, http.StatusConflict, "Note already exists")
+		a.renderHTMLTemplate(w, http.StatusConflict, "index.html", IndexPageData{
+			Slug:  slug,
+			Error: "Note already exists",
+		})
 		return
 	}
 	// Post/Redirect/Get prevents a browser refresh from submitting the creation
@@ -335,19 +346,4 @@ func getenv(key, fallback string, log bool) string {
 // validateSlug enforces note-name rules.
 func validateSlug(slug string) bool {
 	return slugPattern.MatchString(slug)
-}
-
-// alertBack produces a tiny HTML response for form errors on the creation page.
-// %q quotes and escapes the message before embedding it as a JavaScript string.
-// TODO: dont like the name of this function, not descriptive enought
-func alertBack(w http.ResponseWriter, status int, message string) {
-	// TODO: is this really the best approach ? wouldnt a browser level alert suffice ?
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	fmt.Fprintf(w, `
-			<script>
-				alert(%q);
-				window.history.back();
-			</script>
-		`, message)
 }
