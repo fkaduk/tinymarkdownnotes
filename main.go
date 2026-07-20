@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	_ "embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -158,7 +157,6 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /notes", a.requireAuth(a.handleCreateNote))
 	mux.HandleFunc("GET /notes/{slug}", a.handleViewNote)
 	mux.HandleFunc("POST /notes/{slug}", a.handleUpdateNote)
-	mux.HandleFunc("GET /notes/{slug}/meta", a.handleNoteMeta)
 
 	return mux
 }
@@ -241,33 +239,6 @@ func (a *App) handleViewNote(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleNoteMeta returns lightweight JSON used by the browser's version poll.
-// It avoids downloading and rendering the full note merely to detect a change.
-func (a *App) handleNoteMeta(w http.ResponseWriter, r *http.Request) {
-	// TODO: dont like this approach, code duplication + another endpoint. this app handles tiny notes, so im fine with fetching the entire note every time. Except if there is a much smarter approach ?
-	slug := r.PathValue("slug")
-	if !validateSlug(slug) {
-		http.Error(w, "Invalid note slug", http.StatusBadRequest)
-		return
-	}
-	note, ok, err := a.getNote(r.Context(), slug)
-	if err != nil {
-		http.Error(w, "Load note failed", http.StatusInternalServerError)
-		return
-	}
-	if !ok {
-		http.Error(w, "Note not found", http.StatusNotFound)
-		return
-	}
-	// Set response headers before writing the body. Encode streams JSON directly
-	// to the ResponseWriter and appends a newline.
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"version":    note.Version,
-		"updated_at": note.UpdatedAt,
-	})
-}
-
 // handleUpdateNote saves an edit only if the browser edited the current version.
 func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
@@ -331,8 +302,8 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The browser normally detects staleness through polling. This 409 remains the
-	// authoritative guard for the small race window between polls.
+	// A zero-row update means the submitted version is stale. Keep the stored note
+	// unchanged and let the browser preserve the rejected draft for the user.
 	http.Error(w, "Someone else saved this note first. Your changes were not saved.", http.StatusConflict)
 }
 

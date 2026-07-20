@@ -58,24 +58,16 @@
         let currentMarkdown = {{ .Note.Markdown }};
         const loadedVersion = {{ .Note.Version }};
 
-        // loadedVersion never changes during this page's lifetime. latestVersion
-        // records what polling most recently saw on the server.
-        let latestVersion = loadedVersion;
-
-        // Once stale, this tab may no longer save. Reloading creates a fresh page
-        // with the latest Markdown and version.
+        // Once a save conflict is detected, this tab may no longer save. Reloading
+        // creates a fresh page with the latest Markdown and version.
         let isStale = false;
-
-        // A slow request could last longer than the one-second poll interval.
-        // This flag prevents overlapping metadata requests from piling up.
-        let versionCheckInFlight = false;
 
         // origin is scheme + host; pathname excludes query parameters. Sharing
         // this clean URL avoids leaking unrelated query data.
         const cleanUrl = window.location.origin + window.location.pathname;
 
         // Cache element references once rather than searching the DOM every time
-        // a button is clicked or a poll completes.
+        // a button is clicked.
         const previewDiv = document.getElementById('preview');
         const editorWrap = document.getElementById('editor-wrap');
         const editor = document.getElementById('editor');
@@ -214,7 +206,6 @@
             editorWrap.style.display = 'block';
             previewTab.classList.remove('active');
             editTab.classList.add('active');
-            updateStaleState(latestVersion > loadedVersion);
         }
 
         // Keep all stale-related UI changes in one function so every detection
@@ -226,44 +217,11 @@
             saveButton.classList.toggle('ghosted', stale);
         }
 
-        // pollVersion asks the small JSON endpoint whether another browser has
-        // saved since this page loaded.
-        async function pollVersion() {
-            if (versionCheckInFlight || isStale) {
-                return;
-            }
-            versionCheckInFlight = true;
-            try {
-                // The Accept header documents that this caller expects JSON.
-                const response = await fetch(window.location.pathname + '/meta', {
-                    headers: { 'Accept': 'application/json' }
-                });
-                if (!response.ok) {
-                    return;
-                }
-                const data = await response.json();
-                latestVersion = data.version;
-
-                // Versions only increase, so greater-than means this page is old.
-                if (latestVersion > loadedVersion) {
-                    updateStaleState(true);
-                }
-            } catch (error) {
-                // A transient poll failure should not disrupt reading/editing. A
-                // later poll or the server's 409 guard still protects the note.
-                console.error('Version check failed:', error);
-            } finally {
-                // finally runs after success, early return, or exception.
-                versionCheckInFlight = false;
-            }
-        }
-
         // Event listeners connect user/browser events to the functions above.
         previewTab.addEventListener('click', showPreview);
         editTab.addEventListener('click', showEdit);
         editor.addEventListener('input', () => {
             currentMarkdown = editor.value;
-            updateStaleState(latestVersion > loadedVersion);
         });
         form.addEventListener('submit', async (event) => {
             // Stop normal page navigation so this handler can process 409 inline.
@@ -289,18 +247,8 @@
             }
         });
 
-        // Initial page setup: render immediately, check the version immediately,
-        // then poll once per second. Focus/visibility checks cover browser timer
-        // throttling while a tab is in the background.
+        // Initial page setup renders the server-provided Markdown immediately.
         renderPreview();
-        pollVersion();
-        setInterval(pollVersion, 1000);
-        window.addEventListener('focus', pollVersion);
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) {
-                pollVersion();
-            }
-        });
     </script>
 </body>
 </html>
