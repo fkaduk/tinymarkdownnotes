@@ -22,7 +22,9 @@ import (
 const (
 	defaultAdminKey  = "change-me-in-production"
 	maxMarkdownBytes = 100_000
-	maxFormBytes     = 3*maxMarkdownBytes + 1024
+	// TODO: is 3* really enough for any possible rune?
+	// also i dont want this here, it`s not necessary to define as const, just define in situ
+	maxFormBytes = 3*maxMarkdownBytes + 1024
 )
 
 var slugPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
