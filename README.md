@@ -44,25 +44,28 @@ make down
 This project uses Go and SQLite:
 
 ```bash
-go test ./...
-go run .
+make check
+make run
 ```
 
 The app stores notes in `data/notes.db`.
+
+Run `make help` to see the build, formatting, linting, coverage, benchmark,
+end-to-end test, and Compose targets. Variables are overrideable for larger
+repositories; for example, `make build APP_NAME=api CMD_PATH=./cmd/api`.
 
 ### End-to-end tests
 
 Install the JavaScript dependencies and the Chromium test browser once:
 
 ```bash
-npm install
-npx playwright install chromium
+make setup-e2e
 ```
 
 Run the end-to-end suite:
 
 ```bash
-npm run test:e2e
+make test-e2e
 ```
 
 Playwright starts the Go application automatically on port 4173 with an
