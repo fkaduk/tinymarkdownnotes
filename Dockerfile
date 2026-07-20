@@ -4,6 +4,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY main.go ./
+COPY templates/init_note.md templates/init_note.md
 RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/tinymarkdownnotes .
 
 FROM debian:12-slim

@@ -8,6 +8,12 @@ __pycache__
 *.egg-info
 dist
 build
+bin
+coverage
+node_modules
+test-results
+playwright-report
+public
 notes/*
 data
 data/**

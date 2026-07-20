@@ -14,8 +14,10 @@ cp .env.example .env
 For local deployment, run:
 
 ```bash
-make up
+docker compose up -d --build
 ```
+
+Use `docker-compose` instead if Compose is installed as a standalone command.
 
 The app is available at `http://localhost:5000`.
 
@@ -26,17 +28,17 @@ COMPOSE_PROFILES=production
 DOMAIN=notes.example.com
 ```
 
-Then run `make up`. The same Compose file starts Caddy when the `production`
-profile is enabled. Port 5000 remains bound to the host loopback interface;
-public traffic enters through Caddy on ports 80 and 443.
+Then run `docker compose up -d --build`. The same Compose file starts Caddy
+when the `production` profile is enabled. Port 5000 remains bound to the host
+loopback interface; public traffic enters through Caddy on ports 80 and 443.
 
 Useful commands:
 
 ```bash
-make ps
-make logs
-make restart
-make down
+docker compose ps
+docker compose logs -f
+docker compose restart
+docker compose down
 ```
 
 ## Development
@@ -44,28 +46,40 @@ make down
 This project uses Go and SQLite:
 
 ```bash
-make check
+make audit
+make test
+make build
 make run
 ```
 
 The app stores notes in `data/notes.db`.
 
-Run `make help` to see the build, formatting, linting, coverage, benchmark,
-end-to-end test, and Compose targets. Variables are overrideable for larger
-repositories; for example, `make build APP_NAME=api CMD_PATH=./cmd/api`.
+`make test` runs both Go and Playwright tests. `make build` writes the native
+binary to `bin/tinymarkdownnotes`.
+
+Plain `make` and `make all` run the same audit, test, and build sequence used by
+CI:
+
+```bash
+make all
+```
+
+The project prefers Go 1.26.5 while retaining Go 1.25 language compatibility.
+Node.js 24.18.0 is pinned in `.node-version`.
 
 ### End-to-end tests
 
 Install the JavaScript dependencies and the Chromium test browser once:
 
 ```bash
-make setup-e2e
+npm ci
+npx playwright install chromium
 ```
 
 Run the end-to-end suite:
 
 ```bash
-make test-e2e
+make test
 ```
 
 Playwright starts the Go application automatically on port 4173 with an
