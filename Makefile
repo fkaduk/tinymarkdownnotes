@@ -31,3 +31,10 @@ build:
 
 run:
 	CGO_ENABLED=1 $(GO) run .
+
+tag:
+	@test -z "$$(git status --porcelain)" || (echo "error: working tree is dirty"; exit 1)
+	@read -p "Version (e.g. v2.0.0): " v && \
+	  echo "Tagging $$v at $$(git rev-parse --short HEAD)" && \
+	  read -p "Push to origin? [y/N] " confirm && [ "$$confirm" = "y" ] && \
+	  git tag $$v && git push origin $$v
