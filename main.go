@@ -22,6 +22,7 @@ import (
 const (
 	defaultAdminKey  = "change-me-in-production"
 	maxMarkdownBytes = 100_000
+	maxFormBytes     = 3*maxMarkdownBytes + 1024
 )
 
 var slugPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
@@ -36,11 +37,9 @@ type App struct {
 }
 
 type Note struct {
-	Slug      string
-	Markdown  string
-	Version   int
-	CreatedAt string
-	UpdatedAt string
+	Slug     string
+	Markdown string
+	Version  int
 }
 
 func main() {
@@ -83,7 +82,9 @@ func NewApp(dbPath, adminKey string) (*App, error) {
 		return nil, fmt.Errorf("create database directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite3", dbPath+"?_busy_timeout=5000&_foreign_keys=1")
+	// DSN options are applied to every SQLite connection opened by database/sql.
+	dsn := dbPath + "?_busy_timeout=5000&_foreign_keys=1"
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
@@ -110,9 +111,6 @@ func (a *App) Close() error {
 func (a *App) configureDatabase() error {
 	if _, err := a.db.Exec(`PRAGMA journal_mode = WAL`); err != nil {
 		return fmt.Errorf("enable wal: %w", err)
-	}
-	if _, err := a.db.Exec(`PRAGMA busy_timeout = 5000`); err != nil {
-		return fmt.Errorf("set busy timeout: %w", err)
 	}
 	_, err := a.db.Exec(`
 		CREATE TABLE IF NOT EXISTS notes (
@@ -216,10 +214,7 @@ func (a *App) handleViewNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.renderHTMLTemplate(w, http.StatusOK, "note.html", map[string]any{
-		"Slug": slug,
-		"Note": note,
-	})
+	a.renderHTMLTemplate(w, http.StatusOK, "note.html", note)
 }
 
 // handleUpdateNote saves an edit only if the browser edited the current version.
@@ -229,7 +224,13 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid note slug", http.StatusBadRequest)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxFormBytes)
 	if err := r.ParseForm(); err != nil {
+		var maxBytesError *http.MaxBytesError
+		if errors.As(err, &maxBytesError) {
+			http.Error(w, "Note content too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "Invalid form", http.StatusBadRequest)
 		return
 	}
@@ -283,9 +284,9 @@ func (a *App) getNote(ctx context.Context, slug string) (Note, error) {
 
 	err := a.db.QueryRowContext(
 		ctx,
-		`SELECT slug, markdown, version, created_at, updated_at FROM notes WHERE slug = ?`,
+		`SELECT slug, markdown, version FROM notes WHERE slug = ?`,
 		slug,
-	).Scan(&note.Slug, &note.Markdown, &note.Version, &note.CreatedAt, &note.UpdatedAt)
+	).Scan(&note.Slug, &note.Markdown, &note.Version)
 	return note, err
 }
 

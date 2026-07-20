@@ -219,7 +219,7 @@ func TestEditNoteTooLargeReturns413(t *testing.T) {
 	createTestNote(t, app, "large-test", "", 1)
 
 	rr := formRequest(app, http.MethodPost, "/notes/large-test", url.Values{
-		"markdown": {strings.Repeat("x", 200_000)},
+		"markdown": {strings.Repeat("x", maxFormBytes+1)},
 		"version":  {"1"},
 	}, false)
 
