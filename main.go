@@ -91,8 +91,7 @@ func NewApp(dbPath, adminKey string) (*App, error) {
 	db.SetMaxOpenConns(1) // concurrent writes are not a good idea for sqlite
 
 	app := &App{db: db, adminKey: adminKey}
-	// TODO: what does context Background mean here?
-	if err := app.configureDatabase(context.Background()); err != nil {
+	if err := app.configureDatabase(); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -109,14 +108,14 @@ func (a *App) Close() error {
 }
 
 // configureDatabase applies SQLite settings and creates the schema.
-func (a *App) configureDatabase(ctx context.Context) error {
-	if _, err := a.db.ExecContext(ctx, `PRAGMA journal_mode = WAL`); err != nil {
+func (a *App) configureDatabase() error {
+	if _, err := a.db.Exec(`PRAGMA journal_mode = WAL`); err != nil {
 		return fmt.Errorf("enable wal: %w", err)
 	}
-	if _, err := a.db.ExecContext(ctx, `PRAGMA busy_timeout = 5000`); err != nil {
+	if _, err := a.db.Exec(`PRAGMA busy_timeout = 5000`); err != nil {
 		return fmt.Errorf("set busy timeout: %w", err)
 	}
-	_, err := a.db.ExecContext(ctx, `
+	_, err := a.db.Exec(`
 		CREATE TABLE IF NOT EXISTS notes (
 			slug TEXT PRIMARY KEY,
 			markdown TEXT NOT NULL,
