@@ -138,12 +138,6 @@ func (a *App) loadTemplates() error {
 		"staticURL": func(name string) string {
 			return "/static/" + strings.TrimLeft(name, "/")
 		},
-		// toJSON safely serializes server data for use as a JavaScript value.
-		// TODO: why is this needed?
-		"toJSON": func(v any) (template.JS, error) {
-			b, err := json.Marshal(v)
-			return template.JS(b), err
-		},
 	}
 	tmpl, err := template.New("").Funcs(funcs).ParseGlob("templates/*.html")
 	if err != nil {

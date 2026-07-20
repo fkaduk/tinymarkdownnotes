@@ -53,9 +53,9 @@
     </div>
 
     <script>
-        // Go renders these two template expressions as JavaScript values. toJSON
-        // safely quotes Markdown, including newlines and quote characters.
-        let currentMarkdown = {{ toJSON .Note.Markdown }};
+        // html/template safely quotes Markdown as a JavaScript value, including
+        // newlines and quote characters.
+        let currentMarkdown = {{ .Note.Markdown }};
         const loadedVersion = {{ .Note.Version }};
 
         // loadedVersion never changes during this page's lifetime. latestVersion
