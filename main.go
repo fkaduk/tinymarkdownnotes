@@ -245,14 +245,7 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx, err := a.db.BeginTx(r.Context(), nil)
-	if err != nil {
-		http.Error(w, "Update note failed", http.StatusInternalServerError)
-		return
-	}
-	defer tx.Rollback()
-
-	res, err := tx.ExecContext(
+	res, err := a.db.ExecContext(
 		r.Context(),
 		`UPDATE notes
 		 SET markdown = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP
@@ -278,10 +271,6 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if rows != 1 {
-		http.Error(w, "Update note failed", http.StatusInternalServerError)
-		return
-	}
-	if err := tx.Commit(); err != nil {
 		http.Error(w, "Update note failed", http.StatusInternalServerError)
 		return
 	}
