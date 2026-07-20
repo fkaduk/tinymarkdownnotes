@@ -84,13 +84,12 @@ func NewApp(dbPath, adminKey string) (*App, error) {
 		return nil, fmt.Errorf("create database directory: %w", err)
 	}
 
-	// DSN options are applied to every SQLite connection opened by database/sql.
 	dsn := dbPath + "?_busy_timeout=5000&_foreign_keys=1"
 	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
-	db.SetMaxOpenConns(1) // concurrent writes are not a good idea for sqlite
+	db.SetMaxOpenConns(1) // concurrent writes bad idea for sqlite
 
 	app := &App{db: db, adminKey: adminKey}
 	if err := app.configureDatabase(); err != nil {
@@ -146,7 +145,7 @@ func (a *App) Routes() http.Handler {
 	mux.Handle("GET /static/", handler)
 
 	mux.HandleFunc("GET /{$}", a.handleIndex)
-	mux.HandleFunc("POST /notes", a.requireAuth(a.handleCreateNote))
+	mux.HandleFunc("POST /notes", a.requireAuth(a.handleOpenOrCreateNote))
 	mux.HandleFunc("GET /notes/{slug}", a.handleViewNote)
 	mux.HandleFunc("POST /notes/{slug}", a.handleUpdateNote)
 
@@ -172,8 +171,8 @@ func (a *App) handleIndex(w http.ResponseWriter, r *http.Request) {
 	a.renderHTMLTemplate(w, http.StatusOK, "index.html", nil)
 }
 
-// handleCreateNote validates a submitted HTML form and inserts a new note.
-func (a *App) handleCreateNote(w http.ResponseWriter, r *http.Request) {
+// handleOpenOrCreateNote opens an existing note or creates it when missing.
+func (a *App) handleOpenOrCreateNote(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Invalid form", http.StatusBadRequest)
 		return
@@ -187,7 +186,9 @@ func (a *App) handleCreateNote(w http.ResponseWriter, r *http.Request) {
 	markdown := fmt.Sprintf("# %s\n%s", slug, initNoteContent)
 	_, err := a.db.ExecContext(
 		r.Context(),
-		`INSERT OR IGNORE INTO notes (slug, markdown, version) VALUES (?, ?, 1)`,
+		`INSERT INTO notes (slug, markdown, version)
+		 VALUES (?, ?, 1)
+		 ON CONFLICT(slug) DO NOTHING`,
 		slug,
 		markdown,
 	)
