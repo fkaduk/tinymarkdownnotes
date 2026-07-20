@@ -257,12 +257,9 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	clientVersion, err := strconv.Atoi(r.FormValue("version"))
-	if err != nil {
-		// TODO: dont like it, this catches ANY error, how do we know that
-		// this is clienVersion = 0 case ?
-		// Version zero cannot match a valid row (the schema requires version > 0),
-		// so malformed or missing input safely follows the conflict path.
-		clientVersion = 0
+	if err != nil || clientVersion < 1 {
+		http.Error(w, "Invalid note version", http.StatusBadRequest)
+		return
 	}
 
 	tx, err := a.db.BeginTx(r.Context(), nil)
