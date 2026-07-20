@@ -169,7 +169,7 @@ func (a *App) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 
 // handleIndex renders the note-creation form.
 func (a *App) handleIndex(w http.ResponseWriter, r *http.Request) {
-	a.render(w, http.StatusOK, "index.html", nil)
+	a.renderHTMLTemplate(w, http.StatusOK, "index.html", nil)
 }
 
 // handleCreateNote validates a submitted HTML form and inserts a new note.
@@ -225,7 +225,7 @@ func (a *App) handleViewNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.render(w, http.StatusOK, "note.html", map[string]any{
+	a.renderHTMLTemplate(w, http.StatusOK, "note.html", map[string]any{
 		"Slug": slug,
 		"Note": note,
 	})
@@ -309,10 +309,8 @@ func (a *App) getNote(ctx context.Context, slug string) (Note, error) {
 	return note, err
 }
 
-// render writes one parsed HTML template to the HTTP response.
-// TODO: func name insufficiently rescriptive
-func (a *App) render(w http.ResponseWriter, status int, name string, data any) {
-	// TODO: do we use data type any here because we just propagate the ExecueTemplate arg?
+// renderHTMLTemplate writes one parsed HTML template to the HTTP response.
+func (a *App) renderHTMLTemplate(w http.ResponseWriter, status int, name string, data any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	if err := a.templates.ExecuteTemplate(w, name, data); err != nil {
