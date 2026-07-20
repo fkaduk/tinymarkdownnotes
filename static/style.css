@@ -199,7 +199,7 @@ button:hover, .save-button:hover {
     cursor: not-allowed;
 }
 
-/* Warning shown when polling or a rejected save discovers a newer version. */
+/* Warning shown when a rejected save discovers a newer version. */
 .stale-warning {
     margin-bottom: 12px;
     padding: 12px;

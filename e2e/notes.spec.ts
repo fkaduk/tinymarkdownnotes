@@ -68,12 +68,6 @@ test("rejects a stale save without discarding its draft", async ({
   expect((await firstUpdateResponse).status()).toBe(303);
   await expect(page.locator("#version-field")).toHaveValue("2");
 
-  const dialogMessage = new Promise<string>((resolve) => {
-    secondPage.once("dialog", async (dialog) => {
-      resolve(dialog.message());
-      await dialog.accept();
-    });
-  });
   const conflictResponse = secondPage.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
@@ -82,8 +76,10 @@ test("rejects a stale save without discarding its draft", async ({
   await secondPage.getByRole("button", { name: "Save" }).click();
 
   expect((await conflictResponse).status()).toBe(409);
-  expect(await dialogMessage).toContain("Someone else saved this note first");
   await expect(secondPage.locator("#stale-warning")).toBeVisible();
+  await expect(secondPage.locator("#stale-warning")).toContainText(
+    "Copy your changes from the editor somewhere safe, then reload",
+  );
   await expect(secondPage.locator("#editor")).toHaveValue(staleDraft);
   await expect(secondPage.getByRole("button", { name: "Save" })).toBeDisabled();
 });

@@ -36,8 +36,10 @@
             <!-- With JavaScript unavailable, this still behaves as a normal POST form. -->
             <form method="post">
                 <!-- hidden is a native boolean HTML attribute toggled by JavaScript. -->
-                <div id="stale-warning" class="stale-warning" hidden>
-                    Someone else saved this note. Your changes cannot be saved from this tab.
+                <div id="stale-warning" class="stale-warning" role="alert" hidden>
+                    Someone else saved this note first, so this draft cannot be saved.
+                    Copy your changes from the editor somewhere safe, then reload
+                    this page to get the latest version.
                 </div>
                 <textarea name="markdown" id="editor"></textarea>
                 <!--
@@ -153,10 +155,9 @@
                 });
 
                 // 409 is the optimistic-concurrency fallback. Keep the draft in
-                // the textarea, alert the user, and permanently disable this tab.
+                // the textarea, show instructions, and permanently disable saving.
                 if (response.status === 409) {
                     updateStaleState(true);
-                    window.alert('Someone else saved this note first. Your changes were not saved.');
                     return;
                 }
                 // Network success does not imply HTTP success; response.ok covers
