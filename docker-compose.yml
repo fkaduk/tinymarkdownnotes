@@ -1,13 +1,11 @@
-version: '3.8'
-
 services:
-  notes:
-    build: .
-    ports:
-      - "5000:5000"
+  tinymarkdownnotes:
+    image: ghcr.io/fkaduk/tinymarkdownnotes:latest
     environment:
-      - NOTES_ADMIN_KEY=${NOTES_ADMIN_KEY:-change-me-in-production}
+      - NOTES_ADMIN_KEY=${NOTES_ADMIN_KEY:?set NOTES_ADMIN_KEY in .env}
     volumes:
-      - ./notes:/app/notes
+      - tinymarkdownnotes_data:/app/data
     restart: unless-stopped
-    user: "1000:1000"
+
+volumes:
+  tinymarkdownnotes_data:

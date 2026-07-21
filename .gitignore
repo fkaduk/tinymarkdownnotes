@@ -2,6 +2,8 @@
 __pycache__/
 *.py[oc]
 build/
+bin/
+coverage/
 dist/
 wheels/
 *.egg-info
@@ -11,9 +13,24 @@ wheels/
 
 # Notes storage
 notes/
+data/
+*.db
+*.db-shm
+*.db-wal
+tinymarkdownnotes
 
 # Backup directory
 backup/
+
+# Playwright
+node_modules/
+test-results/
+playwright-report/
+blob-report/
+
+# Hugo output is not used by this Go application
+public/
+.hugo_build.lock
 
 # Environment variables
 .env

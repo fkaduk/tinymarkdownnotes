@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Note: {{ slug }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <script src="https://cdn.jsdelivr.net/npm/markdown-it@14.0.0/dist/markdown-it.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/markdown-it-task-lists@2.1.1/dist/markdown-it-task-lists.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+    <title>Note: {{ .Slug }}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/vendor/markdown-it.min.js"></script>
+    <script src="/static/vendor/markdown-it-task-lists.min.js"></script>
+    <script src="/static/vendor/purify.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -22,131 +22,20 @@
 
         <div id="editor-wrap">
             <form method="post">
-                <textarea name="markdown" id="editor"></textarea>
-                <input type="hidden" name="version" id="version-field" value="{{ note.version }}">
-                <button type="submit" class="save-button">Save</button>
+                <div id="stale-warning" class="stale-warning" role="alert" hidden>
+                    Someone else saved this note first, so this draft cannot be saved.
+                    Copy your changes from the editor somewhere safe, then reload
+                    this page to get the latest version.
+                </div>
+                <textarea name="markdown" id="editor">{{ .Markdown }}</textarea>
+                <input type="hidden" name="version" id="version-field" value="{{ .Version }}">
+                <div class="editor-actions">
+                    <button type="submit" class="save-button" id="save-button">Save</button>
+                </div>
             </form>
         </div>
     </div>
 
-    <script>
-        // Initialize data from server
-        let currentMarkdown = {{ note.markdown | tojson }};
-        const currentVersion = {{ note.version }};
-
-        // Set share URL (without query params)
-        const cleanUrl = window.location.origin + window.location.pathname;
-
-        // Get DOM elements
-        const previewDiv = document.getElementById('preview');
-        const editorWrap = document.getElementById('editor-wrap');
-        const editor = document.getElementById('editor');
-        const versionField = document.getElementById('version-field');
-        const previewTab = document.getElementById('preview-tab');
-        const editTab = document.getElementById('edit-tab');
-        const copyLinkTab = document.getElementById('copy-link-tab');
-
-        // Configure markdown-it
-        const md = window.markdownit({
-            html: false,
-            breaks: true,
-            linkify: true
-        }).use(window.markdownitTaskLists, {enabled: true});
-
-        // Render markdown to preview
-        function renderPreview() {
-            const rawHtml = md.render(currentMarkdown);
-            const cleanHtml = DOMPurify.sanitize(rawHtml);
-            previewDiv.innerHTML = cleanHtml;
-
-            // Attach checkbox listeners
-            const checkboxes = previewDiv.querySelectorAll('input[type="checkbox"].task-list-item-checkbox');
-            checkboxes.forEach((checkbox, index) => {
-                checkbox.addEventListener('click', (e) => {
-                    toggleCheckbox(index, e.target.checked);
-                });
-            });
-        }
-
-        // Toggle a checkbox in the markdown
-        function toggleCheckbox(index, checked) {
-            const lines = currentMarkdown.split('\n');
-            let checkboxCount = 0;
-
-            for (let i = 0; i < lines.length; i++) {
-                // Match task list: - [ ] or - [x] or - [X]
-                if (lines[i].match(/^(\s*[-*+])\s+\[[ xX]\]/)) {
-                    if (checkboxCount === index) {
-                        // Toggle this checkbox
-                        lines[i] = lines[i].replace(/\[[ xX]\]/, checked ? '[x]' : '[ ]');
-                        break;
-                    }
-                    checkboxCount++;
-                }
-            }
-
-            currentMarkdown = lines.join('\n');
-            autoSave();
-        }
-
-        // Auto-save the note
-        async function autoSave() {
-            const formData = new FormData();
-            formData.append('markdown', currentMarkdown);
-            formData.append('version', currentVersion);
-
-            try {
-                const response = await fetch(window.location.pathname, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (response.ok) {
-                    window.location.reload();
-                }
-            } catch (error) {
-                console.error('Save failed:', error);
-            }
-        }
-
-        // Show preview mode
-        function showPreview() {
-            currentMarkdown = editor.value;
-            renderPreview();
-            previewDiv.style.display = 'block';
-            editorWrap.style.display = 'none';
-            previewTab.classList.add('active');
-            editTab.classList.remove('active');
-        }
-
-        // Show edit mode
-        function showEdit() {
-            editor.value = currentMarkdown;
-            versionField.value = currentVersion;
-            previewDiv.style.display = 'none';
-            editorWrap.style.display = 'block';
-            previewTab.classList.remove('active');
-            editTab.classList.add('active');
-        }
-
-        // Tab button listeners
-        previewTab.addEventListener('click', showPreview);
-        editTab.addEventListener('click', showEdit);
-        copyLinkTab.addEventListener('click', async () => {
-            try {
-                await navigator.clipboard.writeText(cleanUrl);
-                const originalText = copyLinkTab.textContent;
-                copyLinkTab.textContent = '✓ Copied';
-                setTimeout(() => {
-                    copyLinkTab.textContent = originalText;
-                }, 2000);
-            } catch (err) {
-                console.error('Failed to copy:', err);
-            }
-        });
-
-        // Initialize in preview mode
-        renderPreview();
-    </script>
+    <script src="/static/note.js"></script>
 </body>
 </html>

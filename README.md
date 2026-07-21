@@ -1,36 +1,45 @@
 # Tiny Markdown Notes
 
-A dead-simple way to share public markdown notes.
+A small Go application for creating and sharing public Markdown notes
 
-## Deployment
-
-Set up your environment variables:
+## Run locally
 
 ```bash
-cp .env.example .env
-# Edit .env with your values
+NOTES_ADMIN_KEY=change-me make run
 ```
 
-For **base deployment**, run:
+Open <http://localhost:5000>
+
+Notes are stored in `data/notes.db`
+
+## Test and build
 
 ```bash
-docker-compose up -d
+npm ci
+npx playwright install chromium
+make all
 ```
 
-and access the app at `http://localhost:5000`
+## Configuration
 
-For **production deployment** with HTTPS and rate limiting, run:
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ADDR` | `:5000` | HTTP listen address |
+| `NOTES_ADMIN_KEY` | required | Password for creating notes |
+
+## Container image
+
+Tagged releases are published as:
+
+```text
+ghcr.io/fkaduk/tinymarkdownnotes:<version>
+ghcr.io/fkaduk/tinymarkdownnotes:latest
+```
+
+The container listens on port `5000` and stores its database under `/app/data`
+
+## Release
 
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+make tag
 ```
-
-a access the app at your selected domain.
-
-## Development
-
-This project uses uv, so simply use
-`uv sync` to install dependencies,
-`uv run pytest` to run tests and
-`uv run python app.py` to start the app.
-

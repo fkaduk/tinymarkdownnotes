@@ -12,6 +12,7 @@ body {
     color: #e0e0e0;
 }
 
+/* The central card shared by the index and note pages. */
 .container {
     background: #2b2b2b;
     padding: 30px;
@@ -19,6 +20,7 @@ body {
     box-shadow: 0 2px 8px rgba(0,0,0,0.5);
 }
 
+/* Basic form controls use the same dark palette as the surrounding page. */
 h1 {
     margin-top: 0;
     color: #f0f0f0;
@@ -54,6 +56,7 @@ button:hover, .save-button:hover {
     background: #7ec9e6;
 }
 
+/* Flexbox lays out tabs in one row; .spacer consumes remaining horizontal room. */
 .tabs {
     display: flex;
     gap: 10px;
@@ -65,6 +68,7 @@ button:hover, .save-button:hover {
     flex: 1;
 }
 
+/* Tab state is visual only; JavaScript toggles the active class. */
 .tab-button {
     padding: 10px 20px;
     border: none;
@@ -86,6 +90,7 @@ button:hover, .save-button:hover {
     border-bottom-color: #5eb3d6;
 }
 
+/* The preview is filled with sanitized HTML generated from Markdown. */
 #preview {
     min-height: 200px;
     padding: 20px;
@@ -95,6 +100,7 @@ button:hover, .save-button:hover {
     color: #e0e0e0;
 }
 
+/* Descendant selectors style Markdown-generated elements only inside preview. */
 #preview h1, #preview h2, #preview h3 {
     margin-top: 24px;
     margin-bottom: 12px;
@@ -141,15 +147,18 @@ button:hover, .save-button:hover {
     border: 1px solid #404040;
 }
 
+/* Avoid applying the inline-code background twice inside fenced code blocks. */
 #preview pre code {
     background: none;
     padding: 0;
 }
 
+/* Start in preview mode. JavaScript changes this to block for edit mode. */
 #editor-wrap {
     display: none;
 }
 
+/* The Markdown source editor fills its container and uses a fixed-width font. */
 #editor {
     width: 100%;
     min-height: 400px;
@@ -167,76 +176,25 @@ button:hover, .save-button:hover {
     margin-top: 10px;
 }
 
-.conflict-actions {
+.editor-actions {
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-top: 10px;
 }
 
-.merge-label {
-    margin: 24px 0 8px 0;
-    color: #a0a0a0;
-    font-size: 14px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+/* Both the explicit class and native disabled state communicate staleness. */
+.save-button.ghosted,
+.save-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
-#merge-editor {
-    width: 100%;
-    min-height: 300px;
+/* Persistent warning shown after a rejected stale save. */
+.stale-warning {
+    margin-bottom: 12px;
     padding: 12px;
-    font-family: monospace;
-    font-size: 14px;
-    border: 1px solid #404040;
+    border: 1px solid #b8893a;
     border-radius: 4px;
-    background: #1a1a1a;
-    color: #e0e0e0;
-    resize: vertical;
-}
-
-.button-link {
-    padding: 10px 24px;
-    background: #404040;
-    color: #e0e0e0;
-    border-radius: 4px;
-    font-size: 16px;
-    font-weight: 500;
-    text-decoration: none;
-    transition: background 0.2s;
-    margin-top: 10px;
-}
-
-.button-link:hover {
-    background: #505050;
-}
-
-.conflict-panels {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-}
-
-@media (max-width: 600px) {
-    .conflict-panels {
-        grid-template-columns: 1fr;
-    }
-}
-
-.conflict-panel h3 {
-    margin: 0 0 8px 0;
-    color: #a0a0a0;
-    font-size: 14px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.preview-panel {
-    min-height: 200px;
-    padding: 16px;
-    border: 1px solid #404040;
-    border-radius: 4px;
-    background: #1f1f1f;
-    color: #e0e0e0;
-    overflow-y: auto;
+    background: #2e2616;
+    color: #f0d28a;
 }

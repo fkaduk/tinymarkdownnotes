@@ -1,18 +1,49 @@
-.PHONY: up down restart logs init
+SHELL := /bin/sh
+.DEFAULT_GOAL := all
 
-init:
-	#fix this hack
-	mkdir -p notes
-	sudo chown -R 1000:1000 notes/
+GO ?= go
+GOFMT ?= gofmt
+NPM ?= npm
+BINARY ?= bin/tinymarkdownnotes
 
-up:
-	docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+.PHONY: all audit test test-e2e build run tag container-build container-run
 
-down:
-	docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
+all: audit test build
 
-restart:
-	docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart
+audit:
+	@files="$$(find . -type f -name '*.go' -not -path './vendor/*')"; \
+	unformatted="$$($(GOFMT) -l $$files)"; \
+	if [ -n "$$unformatted" ]; then \
+		echo "The following files need gofmt:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	fi
+	$(GO) mod tidy -diff
+	$(GO) vet ./...
 
-logs:
-	docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
+test:
+	CGO_ENABLED=1 $(GO) test -count=1 -shuffle=on ./...
+	$(NPM) run test:e2e
+
+test-e2e:
+	$(NPM) run test:e2e:ui
+
+build:
+	@mkdir -p "$$(dirname "$(BINARY)")"
+	CGO_ENABLED=1 $(GO) build -trimpath -o "$(BINARY)" .
+
+run:
+	CGO_ENABLED=1 $(GO) run .
+
+tag:
+	@test -z "$$(git status --porcelain)" || (echo "error: working tree is dirty"; exit 1)
+	@read -p "Version (e.g. v2.0.0): " v && \
+	  echo "Tagging $$v at $$(git rev-parse --short HEAD)" && \
+	  read -p "Push to origin? [y/N] " confirm && [ "$$confirm" = "y" ] && \
+	  git tag $$v && git push origin $$v
+
+container-build: 
+	echo "TODO"
+
+container-run:
+	echo "TODO"
