@@ -1,14 +1,7 @@
-/*
- * Shared stylesheet for both server-rendered pages. CSS selectors choose HTML
- * elements; declarations inside each block describe how those elements render.
- */
-
-/* Include padding and borders in an element's declared width/height. */
 * {
     box-sizing: border-box;
 }
 
-/* Page-level typography, colors, width, and spacing. */
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     max-width: 900px;
@@ -43,12 +36,10 @@ input[type="text"] {
 }
 
 input[type="text"]:focus {
-    /* Replace the browser's default focus ring with a theme-colored border. */
     outline: none;
     border-color: #5eb3d6;
 }
 
-/* A comma groups selectors so native buttons and save buttons share rules. */
 button, .save-button {
     padding: 10px 24px;
     background: #5eb3d6;
@@ -61,7 +52,6 @@ button, .save-button {
     font-weight: 500;
 }
 
-/* :hover is a pseudo-class active while a pointer is over the element. */
 button:hover, .save-button:hover {
     background: #7ec9e6;
 }
