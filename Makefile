@@ -6,7 +6,7 @@ GOFMT ?= gofmt
 NPM ?= npm
 BINARY ?= bin/tinymarkdownnotes
 
-.PHONY: all audit test build run tag container-build container-run
+.PHONY: all audit test test-e2e build run tag container-build container-run
 
 all: audit test build
 
@@ -24,6 +24,9 @@ audit:
 test:
 	CGO_ENABLED=1 $(GO) test -count=1 -shuffle=on ./...
 	$(NPM) run test:e2e
+
+test-e2e:
+	$(NPM) run test:e2e:ui
 
 build:
 	@mkdir -p "$$(dirname "$(BINARY)")"
