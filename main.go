@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"embed"
 	"errors"
@@ -18,12 +17,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const (
-	maxMarkdownBytes = 100_000
-	// TODO: is 3* really enough for any possible rune?
-	// also i dont want this here, it`s not necessary to define as const, just define in situ
-	maxFormBytes = 3*maxMarkdownBytes + 1024
-)
+const maxMarkdownBytes = 100_000
 
 var slugPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 
@@ -179,8 +173,7 @@ func (a *App) handleOpenOrCreateNote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	markdown := fmt.Sprintf("# %s\n%s", slug, initNoteContent)
-	_, err := a.db.ExecContext(
-		r.Context(),
+	_, err := a.db.Exec(
 		`INSERT INTO notes (slug, markdown, version)
 		 VALUES (?, ?, 1)
 		 ON CONFLICT(slug) DO NOTHING`,
@@ -203,7 +196,7 @@ func (a *App) handleViewNote(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid note slug", http.StatusBadRequest)
 		return
 	}
-	note, err := a.getNote(r.Context(), slug)
+	note, err := a.getNote(slug)
 	if errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "Note not found", http.StatusNotFound)
 		return
@@ -223,7 +216,7 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid note slug", http.StatusBadRequest)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxFormBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, 3*maxMarkdownBytes+1024)
 	if err := r.ParseForm(); err != nil {
 		var maxBytesError *http.MaxBytesError
 		if errors.As(err, &maxBytesError) {
@@ -245,8 +238,7 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := a.db.ExecContext(
-		r.Context(),
+	res, err := a.db.Exec(
 		`UPDATE notes
 		 SET markdown = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP
 		 WHERE slug = ? AND version = ?`,
@@ -270,19 +262,14 @@ func (a *App) handleUpdateNote(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Someone else saved this note first. Your changes were not saved.", http.StatusConflict)
 		return
 	}
-	if rows != 1 {
-		http.Error(w, "Update note failed", http.StatusInternalServerError)
-		return
-	}
 	http.Redirect(w, r, "/notes/"+slug, http.StatusSeeOther)
 }
 
 // getNote loads one note by slug.
-func (a *App) getNote(ctx context.Context, slug string) (Note, error) {
+func (a *App) getNote(slug string) (Note, error) {
 	var note Note
 
-	err := a.db.QueryRowContext(
-		ctx,
+	err := a.db.QueryRow(
 		`SELECT slug, markdown, version FROM notes WHERE slug = ?`,
 		slug,
 	).Scan(&note.Slug, &note.Markdown, &note.Version)
