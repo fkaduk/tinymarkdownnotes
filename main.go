@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
-	_ "embed"
+	"embed"
 	"errors"
 	"fmt"
 	"html/template"
@@ -20,7 +20,6 @@ import (
 )
 
 const (
-	defaultAdminKey  = "change-me-in-production"
 	maxMarkdownBytes = 100_000
 	// TODO: is 3* really enough for any possible rune?
 	// also i dont want this here, it`s not necessary to define as const, just define in situ
@@ -28,6 +27,9 @@ const (
 )
 
 var slugPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
+
+//go:embed templates/*.html static
+var assets embed.FS
 
 //go:embed templates/init_note.md
 var initNoteContent string
@@ -45,13 +47,9 @@ type Note struct {
 }
 
 func main() {
-	addr := getenv("ADDR", ":5000", true)
-	dataDir := getenv("DATA_DIR", "data", true)
-	dbPath := getenv("NOTES_DB_PATH", filepath.Join(dataDir, "notes.db"), true)
-	adminKey := getenv("NOTES_ADMIN_KEY", defaultAdminKey, false)
-	if adminKey == defaultAdminKey {
-		slog.Warn("NOTES_ADMIN_KEY is using the insecure default")
-	}
+	addr := getenv("ADDR", ":5000")
+	dbPath := getenv("NOTES_DB_PATH", "data/notes.db")
+	adminKey := strings.TrimSpace(os.Getenv("NOTES_ADMIN_KEY"))
 
 	app, err := NewApp(dbPath, adminKey)
 	if err != nil {
@@ -79,6 +77,9 @@ func main() {
 func NewApp(dbPath, adminKey string) (*App, error) {
 	if dbPath == "" {
 		return nil, errors.New("database path is required")
+	}
+	if strings.TrimSpace(adminKey) == "" {
+		return nil, errors.New("NOTES_ADMIN_KEY is required")
 	}
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		return nil, fmt.Errorf("create database directory: %w", err)
@@ -130,7 +131,7 @@ func (a *App) configureDatabase() error {
 
 // loadTemplates parses HTML templates once during startup.
 func (a *App) loadTemplates() error {
-	tmpl, err := template.ParseGlob("templates/*.html")
+	tmpl, err := template.ParseFS(assets, "templates/*.html")
 	if err != nil {
 		return fmt.Errorf("parse templates: %w", err)
 	}
@@ -141,22 +142,14 @@ func (a *App) loadTemplates() error {
 // Routes builds the HTTP handler tree.
 func (a *App) Routes() http.Handler {
 	mux := http.NewServeMux()
-	handler := http.StripPrefix("/static/", http.FileServer(http.Dir("static")))
-	mux.Handle("GET /static/", handler)
+	mux.Handle("GET /static/", http.FileServer(http.FS(assets)))
 
 	mux.HandleFunc("GET /{$}", a.handleIndex)
-	mux.HandleFunc("GET /robots.txt", handleRobots)
 	mux.HandleFunc("POST /notes", a.requireAuth(a.handleOpenOrCreateNote))
 	mux.HandleFunc("GET /notes/{slug}", a.handleViewNote)
 	mux.HandleFunc("POST /notes/{slug}", a.handleUpdateNote)
 
 	return mux
-}
-
-// handleRobots asks compliant crawlers not to visit note pages.
-func handleRobots(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	fmt.Fprint(w, "User-agent: *\nDisallow: /notes/\n")
 }
 
 // requireAuth accepts a handler and returns a new handler that
@@ -311,16 +304,11 @@ func (a *App) renderHTMLTemplate(w http.ResponseWriter, status int, name string,
 	}
 }
 
-// getenv returns the value of the environment variable named by key after
-// removing leading and trailing whitespace. If the variable is unset or the
-// trimmed value is empty, getenv returns fallback.
-func getenv(key, fallback string, log bool) string {
+// getenv returns fallback when the environment variable is empty.
+func getenv(key, fallback string) string {
 	value := strings.TrimSpace(os.Getenv(key))
 	if value == "" {
-		value = fallback
-	}
-	if log {
-		slog.Info("Configuration set - ", "key", key, "value", value)
+		return fallback
 	}
 	return value
 }

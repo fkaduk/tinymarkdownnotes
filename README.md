@@ -25,9 +25,8 @@ make all
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `ADDR` | `:5000` | HTTP listen address |
-| `DATA_DIR` | `data` | Data directory |
 | `NOTES_DB_PATH` | `data/notes.db` | SQLite database path |
-| `NOTES_ADMIN_KEY` | insecure development value | Password for creating notes |
+| `NOTES_ADMIN_KEY` | required | Password for creating notes |
 
 ## Container image
 
@@ -35,6 +34,7 @@ Tagged releases are published as:
 
 ```text
 ghcr.io/fkaduk/tinymarkdownnotes:<version>
+ghcr.io/fkaduk/tinymarkdownnotes:latest
 ```
 
 The container listens on port `5000` and stores its database under `/app/data`

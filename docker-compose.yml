@@ -1,9 +1,9 @@
 services:
   tinymarkdownnotes:
-    image: "ghcr.io/fkaduk/tinymarkdownnotes:${RELEASE_VERSION:?set RELEASE_VERSION}"
+    image: ghcr.io/fkaduk/tinymarkdownnotes:latest
     environment:
       - NOTES_ADMIN_KEY=${NOTES_ADMIN_KEY:?set NOTES_ADMIN_KEY in .env}
-      - DATA_DIR=/app/data
+      - NOTES_DB_PATH=/app/data/notes.db
     volumes:
       - tinymarkdownnotes_data:/app/data
     restart: unless-stopped
