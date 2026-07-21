@@ -2,6 +2,5 @@
 - run tests with `go test ./...`
 - avoid code comments
 - avoid trailing . in prose
-- this project uses caddy
 - be minimal and concise in your prose
-- use docker-compose when starting the app
+- use `make run` when starting the app locally
