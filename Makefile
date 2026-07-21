@@ -6,7 +6,7 @@ GOFMT ?= gofmt
 NPM ?= npm
 BINARY ?= bin/tinymarkdownnotes
 
-.PHONY: all audit test build run
+.PHONY: all audit test build run tag container-build container-run
 
 all: audit test build
 
@@ -38,3 +38,9 @@ tag:
 	  echo "Tagging $$v at $$(git rev-parse --short HEAD)" && \
 	  read -p "Push to origin? [y/N] " confirm && [ "$$confirm" = "y" ] && \
 	  git tag $$v && git push origin $$v
+
+container-build: 
+	echo "TODO"
+
+container-run:
+	echo "TODO"

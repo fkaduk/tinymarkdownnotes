@@ -4,15 +4,14 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY main.go ./
-COPY templates/init_note.md templates/init_note.md
+COPY templates/ templates/
+COPY static/ static/
 RUN CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/tinymarkdownnotes .
 
 FROM debian:12-slim
 
 WORKDIR /app
 COPY --from=build /out/tinymarkdownnotes /app/tinymarkdownnotes
-COPY templates/ templates/
-COPY static/ static/
 RUN mkdir -p data \
     && useradd -m appuser \
     && chown -R appuser:appuser /app
