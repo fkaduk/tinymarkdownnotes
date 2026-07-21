@@ -1,0 +1,44 @@
+name: Merge Dependabot update
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.pull_requests[0] != null
+    runs-on: ubuntu-latest
+    steps:
+      - name: Accept only Go and npm dependency files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+        run: |
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+            --jq '.[].filename' |
+          while IFS= read -r file; do
+            case "$file" in
+              go.mod|go.sum|package.json|package-lock.json) ;;
+              *) echo "Unexpected file in Dependabot PR: $file"; exit 1 ;;
+            esac
+          done
+
+      - name: Merge the tested update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+        run: >-
+          gh pr merge --squash --match-head-commit "$PR_HEAD_SHA"
+          "https://github.com/${GITHUB_REPOSITORY}/pull/${PR_NUMBER}"
