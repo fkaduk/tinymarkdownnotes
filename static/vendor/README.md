@@ -7,6 +7,6 @@ depend on a CDN at runtime.
 | --- | --- | --- |
 | `markdown-it.min.js` | markdown-it 14.0.0 | MIT |
 | `markdown-it-task-lists.min.js` | markdown-it-task-lists 2.1.1 | ISC |
-| `purify.min.js` | DOMPurify 3.0.6 | Apache-2.0 OR MPL-2.0 |
+| `purify.min.js` | DOMPurify 3.4.12 | Apache-2.0 OR MPL-2.0 |
 
 The original package and license URLs are included in each file's header.
