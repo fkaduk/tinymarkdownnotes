@@ -25,7 +25,6 @@ make all
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `ADDR` | `:5000` | HTTP listen address |
-| `NOTES_DB_PATH` | `data/notes.db` | SQLite database path |
 | `NOTES_ADMIN_KEY` | required | Password for creating notes |
 
 ## Container image

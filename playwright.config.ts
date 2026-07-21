@@ -30,7 +30,7 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'go run .',
+    command: 'mkdir -p test-results && go build -o test-results/tinymarkdownnotes-e2e . && cd test-results && exec ./tinymarkdownnotes-e2e',
     url: baseURL,
     reuseExistingServer: false,
     timeout: 120_000,
@@ -43,7 +43,6 @@ export default defineConfig({
     env: {
       ADDR: '127.0.0.1:4173',
       NOTES_ADMIN_KEY: adminKey,
-      NOTES_DB_PATH: 'test-results/playwright/e2e-notes.db',
     },
   },
 });

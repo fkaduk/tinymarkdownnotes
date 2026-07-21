@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -48,10 +47,9 @@ type Note struct {
 
 func main() {
 	addr := getenv("ADDR", ":5000")
-	dbPath := getenv("NOTES_DB_PATH", "data/notes.db")
 	adminKey := strings.TrimSpace(os.Getenv("NOTES_ADMIN_KEY"))
 
-	app, err := NewApp(dbPath, adminKey)
+	app, err := NewApp(adminKey)
 	if err != nil {
 		slog.Error("initialize app", "error", err)
 		os.Exit(1)
@@ -72,20 +70,16 @@ func main() {
 	}
 }
 
-// NewApp constructs an application backed by dbPath and using adminKey for
-// authentication.
-func NewApp(dbPath, adminKey string) (*App, error) {
-	if dbPath == "" {
-		return nil, errors.New("database path is required")
-	}
+// NewApp constructs the application using adminKey for authentication.
+func NewApp(adminKey string) (*App, error) {
 	if strings.TrimSpace(adminKey) == "" {
 		return nil, errors.New("NOTES_ADMIN_KEY is required")
 	}
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+	if err := os.MkdirAll("data", 0o755); err != nil {
 		return nil, fmt.Errorf("create database directory: %w", err)
 	}
 
-	dsn := dbPath + "?_busy_timeout=5000&_foreign_keys=1"
+	dsn := "data/notes.db?_busy_timeout=5000&_foreign_keys=1"
 	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
