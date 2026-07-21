@@ -51,10 +51,7 @@ function toggleCheckbox(index, checked) {
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].match(/^(\s*[-*+])\s+\[[ xX]\]/)) {
       if (checkboxCount === index) {
-        lines[i] = lines[i].replace(
-          /\[[ xX]\]/,
-          checked ? "[x]" : "[ ]",
-        );
+        lines[i] = lines[i].replace(/\[[ xX]\]/, checked ? "[x]" : "[ ]");
         break;
       }
       checkboxCount++;
