@@ -1,86 +1,46 @@
 # Tiny Markdown Notes
 
-A dead-simple way to share public markdown notes.
+A small Go application for creating and sharing public Markdown notes
 
-## Deployment
-
-Set up your environment variables:
+## Run locally
 
 ```bash
-cp .env.example .env
-# Edit .env and set a real NOTES_ADMIN_KEY before starting Compose
+NOTES_ADMIN_KEY=change-me make run
 ```
 
-For local deployment, run:
+Open <http://localhost:5000>
 
-```bash
-docker compose up -d --build
-```
+Notes are stored in `data/notes.db`
 
-Use `docker-compose` instead if Compose is installed as a standalone command.
-
-The app is available at `http://localhost:5000`.
-
-For production HTTPS and rate limiting, set these values in `.env`:
-
-```dotenv
-COMPOSE_PROFILES=production
-DOMAIN=notes.example.com
-```
-
-Then run `docker compose up -d --build`. The same Compose file starts Caddy
-when the `production` profile is enabled. Port 5000 remains bound to the host
-loopback interface; public traffic enters through Caddy on ports 80 and 443.
-
-Useful commands:
-
-```bash
-docker compose ps
-docker compose logs -f
-docker compose restart
-docker compose down
-```
-
-## Development
-
-This project uses Go and SQLite:
-
-```bash
-make audit
-make test
-make build
-make run
-```
-
-The app stores notes in `data/notes.db`.
-
-`make test` runs both Go and Playwright tests. `make build` writes the native
-binary to `bin/tinymarkdownnotes`.
-
-Plain `make` and `make all` run the same audit, test, and build sequence used by
-CI:
-
-```bash
-make all
-```
-
-The project prefers Go 1.26.5 while retaining Go 1.25 language compatibility.
-Node.js 24.18.0 is pinned in `.node-version`.
-
-### End-to-end tests
-
-Install the JavaScript dependencies and the Chromium test browser once:
+## Test and build
 
 ```bash
 npm ci
 npx playwright install chromium
+make all
 ```
 
-Run the end-to-end suite:
+## Configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ADDR` | `:5000` | HTTP listen address |
+| `DATA_DIR` | `data` | Data directory |
+| `NOTES_DB_PATH` | `data/notes.db` | SQLite database path |
+| `NOTES_ADMIN_KEY` | insecure development value | Password for creating notes |
+
+## Container image
+
+Tagged releases are published as:
+
+```text
+ghcr.io/fkaduk/tinymarkdownnotes:<version>
+```
+
+The container listens on port `5000` and stores its database under `/app/data`
+
+## Release
 
 ```bash
-make test
+make tag
 ```
-
-Playwright starts the Go application automatically on port 4173 with an
-isolated SQLite database under `test-results/`.
